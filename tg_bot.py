@@ -1,17 +1,11 @@
 import os
-import redis
-import requests
 import subprocess
 import asyncio
 import json
-import hashlib
 
-from urllib.parse import urlparse
 from datetime import datetime
 
-from dotenv import load_dotenv
 from loguru import logger
-from openai import OpenAI
 
 from playwright.async_api import async_playwright
 
@@ -24,39 +18,25 @@ from telegram.ext import (
     filters
 )
 
-load_dotenv("/opt/hermes/.env")
-
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-
-os.makedirs("/opt/hermes/logs", exist_ok=True)
-os.makedirs("/opt/hermes/workspace/screenshots", exist_ok=True)
-os.makedirs("/opt/hermes/browser-data/default", exist_ok=True)
-
-logger.add("/opt/hermes/logs/tg.log", rotation="100 MB")
-
-r = redis.Redis(
-    host="127.0.0.1",
-    port=6379,
-    decode_responses=True
+from config.clients import llm_client as client, redis_client as r
+from config.settings import (
+    BOT_TOKEN,
+    BROWSER_DATA_DIR,
+    CHROMIUM_EXECUTABLE,
+    DEFAULT_BROWSER_DATA_DIR,
+    DEEPSEEK_MODEL,
+    LOG_FILE,
+    SCREENSHOT_DIR,
+    TASKS_FILE,
+    ensure_runtime_dirs,
 )
+from memory.chat import ask_llm
+from memory.signals import SIGNAL_MEMORY_PREFIX, filter_new_signals
+from utils.logging import setup_logging
+from utils.urls import build_x_search_url, normalize_browser_target
 
-client = OpenAI(
-    api_key=DEEPSEEK_API_KEY,
-    base_url="https://api.deepseek.com"
-)
-
-SYSTEM_PROMPT = """
-you are hermes-core
-
-rules:
-- concise
-- technical
-- no fluff
-- no emojis
-- prioritize execution
-- give direct answers
-"""
+ensure_runtime_dirs()
+setup_logging()
 
 playwright_instance = None
 browser_context = None
@@ -81,7 +61,7 @@ async def reset_agent_browser(agent_name):
         except Exception:
             pass
 
-    profile_dir = f"/opt/hermes/browser-data/{agent_name}"
+    profile_dir = f"{BROWSER_DATA_DIR}/{agent_name}"
 
     for lock_name in [
         "SingletonLock",
@@ -107,12 +87,12 @@ async def get_agent_page(agent_name):
     if agent_name in browser_pool:
         return browser_pool[agent_name]["page"]
 
-    profile_dir = f"/opt/hermes/browser-data/{agent_name}"
+    profile_dir = f"{BROWSER_DATA_DIR}/{agent_name}"
     os.makedirs(profile_dir, exist_ok=True)
 
     context = await playwright_instance.chromium.launch_persistent_context(
         user_data_dir=profile_dir,
-        executable_path="/root/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome",
+        executable_path=CHROMIUM_EXECUTABLE,
         headless=False,
         args=[
             "--start-maximized",
@@ -145,8 +125,8 @@ async def init_browser():
     playwright_instance = await async_playwright().start()
 
     browser_context = await playwright_instance.chromium.launch_persistent_context(
-        user_data_dir="/opt/hermes/browser-data/default",
-        executable_path="/root/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome",
+        user_data_dir=DEFAULT_BROWSER_DATA_DIR,
+        executable_path=CHROMIUM_EXECUTABLE,
         headless=False,
         args=[
             "--start-maximized",
@@ -168,11 +148,7 @@ async def browser_open(target):
     await init_browser()
 
     try:
-        if not target.startswith("http"):
-            if "." not in target:
-                target = f"https://www.{target}.com"
-            else:
-                target = f"https://{target}"
+        target = normalize_browser_target(target)
 
         await browser_page.goto(
             target,
@@ -212,11 +188,7 @@ async def browser_screenshot(target):
     await init_browser()
 
     try:
-        if not target.startswith("http"):
-            if "." not in target:
-                target = f"https://www.{target}.com"
-            else:
-                target = f"https://{target}"
+        target = normalize_browser_target(target)
 
         await browser_page.goto(
             target,
@@ -228,7 +200,7 @@ async def browser_screenshot(target):
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        path = f"/opt/hermes/workspace/screenshots/{timestamp}.png"
+        path = f"{SCREENSHOT_DIR}/{timestamp}.png"
 
         await browser_page.screenshot(
             path=path,
@@ -243,46 +215,6 @@ async def browser_screenshot(target):
     except Exception as e:
         logger.exception("screenshot error")
         return None, None, f"screenshot error: {str(e)}"
-
-async def ask_llm(user_id, text):
-    history_key = f"memory:{user_id}"
-
-    history = r.lrange(history_key, 0, 10)
-
-    messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT
-        }
-    ]
-
-    for item in reversed(history):
-        role, content = item.split("|||", 1)
-
-        messages.append({
-            "role": role,
-            "content": content
-        })
-
-    messages.append({
-        "role": "user",
-        "content": text
-    })
-
-    response = client.chat.completions.create(
-        model="deepseek-chat",
-        messages=messages,
-        temperature=0.3
-    )
-
-    answer = response.choices[0].message.content
-
-    r.lpush(history_key, f"user|||{text}")
-    r.lpush(history_key, f"assistant|||{answer}")
-
-    r.ltrim(history_key, 0, 20)
-
-    return answer
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = subprocess.getoutput(
@@ -308,7 +240,7 @@ async def docker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = subprocess.getoutput(
-        "tail -100 /opt/hermes/logs/tg.log"
+        f"tail -100 {LOG_FILE}"
     )
 
     await update.message.reply_text(result[:4000])
@@ -432,7 +364,7 @@ async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     keyword = " ".join(context.args)
-    url = "https://x.com/search?q=" + keyword.replace(" ", "%20") + "&src=typed_query"
+    url = build_x_search_url(keyword)
 
     await update.message.reply_text(f"searching x: {keyword}")
 
@@ -500,7 +432,7 @@ user request:
 """
 
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=DEEPSEEK_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -632,51 +564,6 @@ AGENT_PROFILES = {
     }
 }
 
-
-
-SIGNAL_MEMORY_PREFIX = "signal_memory:"
-
-def signal_hash(text):
-    raw = (text or "").strip().lower()
-    raw = " ".join(raw.split())
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def filter_new_signals(keyword, text):
-    key = SIGNAL_MEMORY_PREFIX + keyword.lower().strip()
-
-    blocks = []
-    current = []
-
-    for line in text.splitlines():
-        if line.strip():
-            current.append(line)
-        else:
-            if current:
-                blocks.append("\n".join(current))
-                current = []
-
-    if current:
-        blocks.append("\n".join(current))
-
-    new_blocks = []
-
-    for block in blocks:
-        if len(block) < 40:
-            continue
-
-        h = signal_hash(block)
-
-        if not r.sismember(key, h):
-            r.sadd(key, h)
-            new_blocks.append(block)
-
-    r.expire(key, 60 * 60 * 24 * 7)
-
-    return "\n\n---\n\n".join(new_blocks[:20])
-
-TASKS_FILE = "/opt/hermes/tg-bot/autonomous_tasks.json"
-
 def save_autonomous_tasks():
     data = []
 
@@ -742,7 +629,7 @@ async def restore_autonomous_tasks():
 async def autonomous_loop(chat_id, keyword):
     while True:
         try:
-            url = "https://x.com/search?q=" + keyword.replace(" ", "%20") + "&src=typed_query"
+            url = build_x_search_url(keyword)
 
             await browser_open(url)
 
@@ -779,7 +666,7 @@ content:
 """
 
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model=DEEPSEEK_MODEL,
                 messages=[
                     {
                         "role": "system",
@@ -897,7 +784,7 @@ async def intel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"intel scan started: {keyword}")
 
     try:
-        url = "https://x.com/search?q=" + keyword.replace(" ", "%20") + "&src=typed_query"
+        url = build_x_search_url(keyword)
 
         await browser_open(url)
         await browser_page.wait_for_timeout(3000)
@@ -944,7 +831,7 @@ content:
 """
 
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=DEEPSEEK_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -1023,7 +910,7 @@ async def agent_loop(chat_id, name):
 
     while True:
         try:
-            url = "https://x.com/search?q=" + keyword.replace(" ", "%20") + "&src=typed_query"
+            url = build_x_search_url(keyword)
 
             async with browser_lock:
                 await init_browser()
@@ -1069,7 +956,7 @@ content:
 """
 
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model=DEEPSEEK_MODEL,
                 messages=[
                     {
                         "role": "system",
