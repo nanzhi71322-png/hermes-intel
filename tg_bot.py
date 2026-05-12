@@ -1,13 +1,8 @@
-import os
 import subprocess
 import asyncio
 import json
 
-from datetime import datetime
-
 from loguru import logger
-
-from playwright.async_api import async_playwright
 
 from telegram import Update
 from telegram.ext import (
@@ -18,203 +13,28 @@ from telegram.ext import (
     filters
 )
 
+import browser.manager as browser_manager
+from browser.manager import (
+    browser_open,
+    browser_screenshot,
+    init_browser,
+    reset_agent_browser,
+)
 from config.clients import llm_client as client, redis_client as r
 from config.settings import (
     BOT_TOKEN,
-    BROWSER_DATA_DIR,
-    CHROMIUM_EXECUTABLE,
-    DEFAULT_BROWSER_DATA_DIR,
     DEEPSEEK_MODEL,
     LOG_FILE,
-    SCREENSHOT_DIR,
     TASKS_FILE,
     ensure_runtime_dirs,
 )
 from memory.chat import ask_llm
 from memory.signals import SIGNAL_MEMORY_PREFIX, filter_new_signals
 from utils.logging import setup_logging
-from utils.urls import build_x_search_url, normalize_browser_target
+from utils.urls import build_x_search_url
 
 ensure_runtime_dirs()
 setup_logging()
-
-playwright_instance = None
-browser_context = None
-browser_page = None
-browser_lock = asyncio.Lock()
-
-browser_pool = {}
-
-async def reset_agent_browser(agent_name):
-    global browser_pool
-
-    item = browser_pool.get(agent_name)
-
-    if item:
-        try:
-            await item["context"].close()
-        except Exception:
-            pass
-
-        try:
-            del browser_pool[agent_name]
-        except Exception:
-            pass
-
-    profile_dir = f"{BROWSER_DATA_DIR}/{agent_name}"
-
-    for lock_name in [
-        "SingletonLock",
-        "SingletonSocket",
-        "SingletonCookie"
-    ]:
-        lock_path = os.path.join(profile_dir, lock_name)
-        try:
-            if os.path.exists(lock_path):
-                os.remove(lock_path)
-        except Exception:
-            pass
-
-    logger.warning(f"agent browser reset: {agent_name}")
-
-async def get_agent_page(agent_name):
-    global playwright_instance
-    global browser_pool
-
-    if playwright_instance is None:
-        playwright_instance = await async_playwright().start()
-
-    if agent_name in browser_pool:
-        return browser_pool[agent_name]["page"]
-
-    profile_dir = f"{BROWSER_DATA_DIR}/{agent_name}"
-    os.makedirs(profile_dir, exist_ok=True)
-
-    context = await playwright_instance.chromium.launch_persistent_context(
-        user_data_dir=profile_dir,
-        executable_path=CHROMIUM_EXECUTABLE,
-        headless=False,
-        args=[
-            "--start-maximized",
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox"
-        ]
-    )
-
-    if context.pages:
-        page = context.pages[0]
-    else:
-        page = await context.new_page()
-
-    browser_pool[agent_name] = {
-        "context": context,
-        "page": page
-    }
-
-    return page
-
-
-async def init_browser():
-    global playwright_instance
-    global browser_context
-    global browser_page
-
-    if browser_context:
-        return
-
-    playwright_instance = await async_playwright().start()
-
-    browser_context = await playwright_instance.chromium.launch_persistent_context(
-        user_data_dir=DEFAULT_BROWSER_DATA_DIR,
-        executable_path=CHROMIUM_EXECUTABLE,
-        headless=False,
-        args=[
-            "--start-maximized",
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox"
-        ]
-    )
-
-    pages = browser_context.pages
-
-    if pages:
-        browser_page = pages[0]
-    else:
-        browser_page = await browser_context.new_page()
-
-async def browser_open(target):
-    global browser_page
-
-    await init_browser()
-
-    try:
-        target = normalize_browser_target(target)
-
-        await browser_page.goto(
-            target,
-            timeout=60000,
-            wait_until="domcontentloaded"
-        )
-
-        await browser_page.wait_for_timeout(3000)
-
-        title = await browser_page.title()
-        current_url = browser_page.url
-
-        try:
-            body_text = await browser_page.locator("body").inner_text(timeout=5000)
-        except Exception:
-            body_text = ""
-
-        if len(body_text) > 1200:
-            body_text = body_text[:1200]
-
-        return f"""browser opened
-
-title: {title}
-url: {current_url}
-
-preview:
-{body_text}
-"""
-
-    except Exception as e:
-        logger.exception("browser error")
-        return f"browser error: {str(e)}"
-
-async def browser_screenshot(target):
-    global browser_page
-
-    await init_browser()
-
-    try:
-        target = normalize_browser_target(target)
-
-        await browser_page.goto(
-            target,
-            timeout=60000,
-            wait_until="domcontentloaded"
-        )
-
-        await browser_page.wait_for_timeout(5000)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        path = f"{SCREENSHOT_DIR}/{timestamp}.png"
-
-        await browser_page.screenshot(
-            path=path,
-            full_page=True
-        )
-
-        title = await browser_page.title()
-        current_url = browser_page.url
-
-        return path, title, current_url
-
-    except Exception as e:
-        logger.exception("screenshot error")
-        return None, None, f"screenshot error: {str(e)}"
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = subprocess.getoutput(
@@ -305,7 +125,7 @@ async def click_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await init_browser()
 
     try:
-        await browser_page.get_by_text(target, exact=False).click(timeout=10000)
+        await browser_manager.browser_page.get_by_text(target, exact=False).click(timeout=10000)
         await update.message.reply_text(f"clicked: {target}")
     except Exception as e:
         await update.message.reply_text(f"click error: {str(e)}")
@@ -322,7 +142,7 @@ async def type_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await init_browser()
 
     try:
-        await browser_page.locator(selector).fill(text, timeout=10000)
+        await browser_manager.browser_page.locator(selector).fill(text, timeout=10000)
         await update.message.reply_text(f"typed into: {selector}")
     except Exception as e:
         await update.message.reply_text(f"type error: {str(e)}")
@@ -338,7 +158,7 @@ async def press_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await init_browser()
 
     try:
-        await browser_page.keyboard.press(key)
+        await browser_manager.browser_page.keyboard.press(key)
         await update.message.reply_text(f"pressed: {key}")
     except Exception as e:
         await update.message.reply_text(f"press error: {str(e)}")
@@ -353,7 +173,7 @@ async def typeactive_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await init_browser()
 
     try:
-        await browser_page.keyboard.type(text, delay=30)
+        await browser_manager.browser_page.keyboard.type(text, delay=30)
         await update.message.reply_text(f"typed active: {text}")
     except Exception as e:
         await update.message.reply_text(f"typeactive error: {str(e)}")
@@ -376,11 +196,11 @@ async def read_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await init_browser()
 
     try:
-        title = await browser_page.title()
-        url = browser_page.url
+        title = await browser_manager.browser_page.title()
+        url = browser_manager.browser_page.url
 
         try:
-            text = await browser_page.locator("body").inner_text(timeout=8000)
+            text = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
         except Exception:
             text = ""
 
@@ -404,11 +224,11 @@ async def askpage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await init_browser()
 
     try:
-        title = await browser_page.title()
-        url = browser_page.url
+        title = await browser_manager.browser_page.title()
+        url = browser_manager.browser_page.url
 
         try:
-            body = await browser_page.locator("body").inner_text(timeout=8000)
+            body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
         except Exception:
             body = ""
 
@@ -467,8 +287,8 @@ async def scroll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount = 900
 
     try:
-        await browser_page.mouse.wheel(0, amount)
-        await browser_page.wait_for_timeout(1500)
+        await browser_manager.browser_page.mouse.wheel(0, amount)
+        await browser_manager.browser_page.wait_for_timeout(1500)
         await update.message.reply_text(f"scrolled: {amount}")
     except Exception as e:
         await update.message.reply_text(f"scroll error: {str(e)}")
@@ -478,7 +298,7 @@ async def extractlinks_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await init_browser()
 
     try:
-        links = await browser_page.locator("a").evaluate_all("""
+        links = await browser_manager.browser_page.locator("a").evaluate_all("""
             els => els.slice(0, 30).map((a, i) => ({
                 i,
                 text: (a.innerText || a.textContent || '').trim().slice(0, 80),
@@ -516,7 +336,7 @@ async def clickindex_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        links = browser_page.locator("a")
+        links = browser_manager.browser_page.locator("a")
         count = await links.count()
 
         if index < 0 or index >= count:
@@ -524,10 +344,10 @@ async def clickindex_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         await links.nth(index).click(timeout=10000)
-        await browser_page.wait_for_timeout(3000)
+        await browser_manager.browser_page.wait_for_timeout(3000)
 
-        title = await browser_page.title()
-        url = browser_page.url
+        title = await browser_manager.browser_page.title()
+        url = browser_manager.browser_page.url
 
         await update.message.reply_text(f"clicked index: {index}\n\ntitle: {title}\nurl: {url}")
 
@@ -633,13 +453,13 @@ async def autonomous_loop(chat_id, keyword):
 
             await browser_open(url)
 
-            await browser_page.wait_for_timeout(3000)
+            await browser_manager.browser_page.wait_for_timeout(3000)
 
-            await browser_page.mouse.wheel(0, 1200)
+            await browser_manager.browser_page.mouse.wheel(0, 1200)
 
-            await browser_page.wait_for_timeout(2000)
+            await browser_manager.browser_page.wait_for_timeout(2000)
 
-            body = await browser_page.locator("body").inner_text(timeout=8000)
+            body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
 
             body = filter_new_signals(keyword, body)
 
@@ -787,13 +607,13 @@ async def intel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = build_x_search_url(keyword)
 
         await browser_open(url)
-        await browser_page.wait_for_timeout(3000)
+        await browser_manager.browser_page.wait_for_timeout(3000)
 
         for _ in range(3):
-            await browser_page.mouse.wheel(0, 1200)
-            await browser_page.wait_for_timeout(1500)
+            await browser_manager.browser_page.mouse.wheel(0, 1200)
+            await browser_manager.browser_page.wait_for_timeout(1500)
 
-        body = await browser_page.locator("body").inner_text(timeout=10000)
+        body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
 
         if len(body) > 16000:
             body = body[:16000]
@@ -912,17 +732,17 @@ async def agent_loop(chat_id, name):
         try:
             url = build_x_search_url(keyword)
 
-            async with browser_lock:
+            async with browser_manager.browser_lock:
                 await init_browser()
 
-                await browser_page.goto(url, timeout=60000, wait_until="domcontentloaded")
-                await browser_page.wait_for_timeout(3000)
+                await browser_manager.browser_page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                await browser_manager.browser_page.wait_for_timeout(3000)
 
                 for _ in range(3):
-                    await browser_page.mouse.wheel(0, 1200)
-                    await browser_page.wait_for_timeout(1500)
+                    await browser_manager.browser_page.mouse.wheel(0, 1200)
+                    await browser_manager.browser_page.wait_for_timeout(1500)
 
-                body = await browser_page.locator("body").inner_text(timeout=10000)
+                body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
 
             body = filter_new_signals(f"agent:{name}", body)
 

@@ -219,3 +219,72 @@ Residual risks after Phase 1:
 Phase 1 completed without changing Telegram command registration, autonomous task restore flow, agent profiles, Playwright lifecycle structure, or self-healing logic.
 
 The entrypoint now imports configuration, clients, logging setup, URL helpers, chat memory, and signal memory from modular packages. This prepares the codebase for the next low-risk extraction: browser lifecycle and browser tools.
+
+## Phase 2 Migration Report
+
+Scope completed:
+
+- Created `browser/__init__.py`.
+- Created `browser/manager.py`.
+- Moved browser state into `browser/manager.py`:
+  - `playwright_instance`
+  - `browser_context`
+  - `browser_page`
+  - `browser_pool`
+  - `browser_lock`
+- Moved browser functions into `browser/manager.py`:
+  - `init_browser()`
+  - `get_agent_page()`
+  - `reset_agent_browser()`
+  - `browser_open()`
+  - `browser_screenshot()`
+
+`tg_bot.py` changes were limited to browser imports and references needed to use the moved state:
+
+```python
+import browser.manager as browser_manager
+from browser.manager import (
+    browser_open,
+    browser_screenshot,
+    init_browser,
+    reset_agent_browser,
+)
+```
+
+Direct browser page and lock references now use the manager module:
+
+```python
+browser_manager.browser_page
+browser_manager.browser_lock
+```
+
+This preserves the single shared logged-in browser behavior because all command handlers, autonomous loops, and agent loops still point to the same module-level Playwright context and page.
+
+Preserved behavior:
+
+- Default persistent browser profile.
+- Per-agent browser pool functions.
+- Existing self-healing call to `reset_agent_browser(f"agent_{name}")`.
+- Existing screenshot path behavior via `SCREENSHOT_DIR`.
+- Existing browser wait times, navigation timeouts, headful Chromium launch args, and returned text formats.
+- Existing Telegram command registration.
+- Existing autonomous and agent loop logic, except references to moved browser state/functions.
+
+Verification:
+
+```bash
+python -m py_compile tg_bot.py browser/__init__.py browser/manager.py
+```
+
+Result:
+
+```text
+passed
+```
+
+Residual risks:
+
+- `tg_bot.py` still contains Telegram command handlers, autonomous task persistence, autonomous loops, and agent loops.
+- Runtime browser behavior was not live-smoke-tested against Telegram or Playwright; verification was static compile only.
+- The known browser recovery mismatch is preserved: agent self-healing resets the per-agent browser pool while `agent_loop()` still uses the shared default browser page.
+- Browser globals remain module-level in `browser.manager`, matching previous behavior but still limiting test isolation.
