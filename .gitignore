@@ -1,0 +1,10 @@
+﻿venv/
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*
+logs/
+screenshots/
+*.bak*
+autonomous_tasks.json
