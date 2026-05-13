@@ -20,6 +20,7 @@ from config.settings import (
     TASKS_FILE,
     ensure_runtime_dirs,
 )
+from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
 from utils.logging import setup_logging
 from utils.urls import build_x_search_url
@@ -178,9 +179,15 @@ content:
             if len(answer) > 4000:
                 answer = answer[:4000]
 
+            signal = score_signal(answer)
+            signal_prefix = (
+                f"[signal: {signal['level'].upper()} {signal['score']}] "
+                f"{signal['reason']}"
+            )
+
             await app.bot.send_message(
                 chat_id=chat_id,
-                text=f"[autonomous: {keyword}]\n\n{answer}"
+                text=f"{signal_prefix}\n[autonomous: {keyword}]\n\n{answer}"
             )
 
         except Exception as e:
@@ -263,9 +270,15 @@ content:
             if len(answer) > 4000:
                 answer = answer[:4000]
 
+            signal = score_signal(answer, agent_name=name)
+            signal_prefix = (
+                f"[signal: {signal['level'].upper()} {signal['score']}] "
+                f"{signal['reason']}"
+            )
+
             await app.bot.send_message(
                 chat_id=chat_id,
-                text=f"[agent:{name}]\n\n{answer}"
+                text=f"{signal_prefix}\n[agent:{name}]\n\n{answer}"
             )
 
         except Exception as e:
