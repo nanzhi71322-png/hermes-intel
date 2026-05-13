@@ -185,6 +185,10 @@ content:
                 f"{signal['reason']}"
             )
 
+            if signal["level"] not in ("high", "critical") and signal["score"] < 70:
+                logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
+                continue
+
             await app.bot.send_message(
                 chat_id=chat_id,
                 text=f"{signal_prefix}\n[autonomous: {keyword}]\n\n{answer}"
@@ -275,6 +279,10 @@ content:
                 f"[signal: {signal['level'].upper()} {signal['score']}] "
                 f"{signal['reason']}"
             )
+
+            if signal["level"] not in ("high", "critical") and signal["score"] < 70:
+                logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
+                continue
 
             await app.bot.send_message(
                 chat_id=chat_id,
