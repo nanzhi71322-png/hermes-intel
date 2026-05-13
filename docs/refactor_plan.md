@@ -288,3 +288,98 @@ Residual risks:
 - Runtime browser behavior was not live-smoke-tested against Telegram or Playwright; verification was static compile only.
 - The known browser recovery mismatch is preserved: agent self-healing resets the per-agent browser pool while `agent_loop()` still uses the shared default browser page.
 - Browser globals remain module-level in `browser.manager`, matching previous behavior but still limiting test isolation.
+
+## Phase 3 Migration Report
+
+Scope completed:
+
+- Created `commands/browser_commands.py`.
+- Created `commands/agent_commands.py`.
+- Created `commands/autonomous_commands.py`.
+- Created `commands/system_commands.py`.
+- Replaced `commands/__init__.py` with centralized handler registration.
+- Removed Telegram command handler bodies from `tg_bot.py`.
+- Replaced inline `app.add_handler(...)` calls with `register_handlers(...)`.
+
+Preserved Telegram commands:
+
+- `/status`
+- `/memory`
+- `/disk`
+- `/docker`
+- `/logs`
+- `/restartbot`
+- `/restartruntime`
+- `/open`
+- `/search`
+- `/read`
+- `/scroll`
+- `/extractlinks`
+- `/clickindex`
+- `/askpage`
+- `/intel`
+- `/autonomous`
+- `/stopauto`
+- `/autolist`
+- `/agent`
+- `/stopagent`
+- `/agents`
+- `/clear_signal_memory`
+- `/screenshot`
+- `/click`
+- `/type`
+- `/press`
+- `/typeactive`
+
+Also preserved the non-command text message handler by moving it to `commands/system_commands.py`.
+
+Dependency wiring:
+
+- `commands.autonomous_commands.configure(...)` receives:
+  - `autonomous_tasks`
+  - `autonomous_loop`
+  - `save_autonomous_tasks`
+
+- `commands.agent_commands.configure(...)` receives:
+  - `autonomous_tasks`
+  - `agent_loop`
+  - `save_autonomous_tasks`
+  - `AGENT_PROFILES`
+
+This avoids importing `tg_bot.py` from command modules and avoids circular imports while keeping autonomous and agent loop behavior in place for this phase.
+
+`tg_bot.py` now handles:
+
+- App construction.
+- Handler registration delegation.
+- Autonomous task restore scheduling.
+- Polling startup.
+- Existing autonomous and agent runtime logic that is not approved for extraction yet.
+
+Preserved behavior:
+
+- Autonomous restore still runs after handler registration through `restore_autonomous_tasks()`.
+- Self-healing remains in `agent_loop()`.
+- Browser state remains in `browser.manager`.
+- Redis chat memory remains in `memory.chat`.
+- Signal memory remains in `memory.signals`.
+- Command names and usage strings were copied from the previous handlers.
+
+Verification:
+
+```bash
+python -m py_compile tg_bot.py commands/__init__.py commands/browser_commands.py commands/agent_commands.py commands/autonomous_commands.py commands/system_commands.py
+```
+
+Result:
+
+```text
+passed
+```
+
+Residual risks:
+
+- `tg_bot.py` is slimmer but not fully entrypoint-only yet because autonomous loops, agent loops, profiles, and task persistence are intentionally left there until their approved phases.
+- Command modules use dependency injection for autonomous and agent command state. If `register_handlers(...)` is not called before those commands are used, the injected module globals would be unset. The current entrypoint calls registration before polling, preserving runtime behavior.
+- Runtime behavior was not live-tested against Telegram; verification was static compile only.
+- `/intel` lives in `commands/browser_commands.py` for this phase because the `intel/` package was explicitly out of scope.

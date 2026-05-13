@@ -6,6 +6,12 @@ This guide deploys the current Hermes Telegram bot implementation as it exists t
 
 Install system packages for Python, Redis, and headful browser execution.
 
+Recommended Python version:
+
+- Production: Python 3.12.
+- Local Windows/Python 3.13: use `python-telegram-bot==22.7` or newer. Older 20.x releases can fail during `ApplicationBuilder().token(...).build()` with `AttributeError: 'Updater' object has no attribute '_Updater__polling_cleanup_cb'`.
+- Only one polling instance can run for a bot token.
+
 ```bash
 sudo mkdir -p /opt/hermes/tg-bot
 sudo mkdir -p /opt/hermes/logs
