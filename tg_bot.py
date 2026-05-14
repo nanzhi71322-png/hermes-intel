@@ -24,6 +24,7 @@ from config.settings import (
 )
 from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
 from intel.feedback_engine import evaluate_decisions, extract_price_from_text, record_decision
+from intel.market_price import get_btc_price
 from intel.opportunity_engine import generate_decision
 from intel.paper_trading import execute_virtual_trade, update_positions
 from intel.signal_engine import score_signal
@@ -207,10 +208,11 @@ content:
                 keyword,
             )
             evaluate_decisions()
-            if price and price > 1000:
+            market_price = get_btc_price()
+            if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
-                    execute_virtual_trade(decision, price, keyword)
-                update_positions(price, keyword)
+                    execute_virtual_trade(decision, market_price, keyword)
+                update_positions(market_price, keyword)
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (
@@ -332,10 +334,11 @@ content:
                 name,
             )
             evaluate_decisions()
-            if price and price > 1000:
+            market_price = get_btc_price()
+            if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
-                    execute_virtual_trade(decision, price, name)
-                update_positions(price, name)
+                    execute_virtual_trade(decision, market_price, name)
+                update_positions(market_price, name)
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (
