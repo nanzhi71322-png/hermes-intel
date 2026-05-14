@@ -209,8 +209,8 @@ content:
             evaluate_decisions()
             if price and price > 1000:
                 if decision["confidence"] > 75:
-                    execute_virtual_trade(decision, price)
-                update_positions(price)
+                    execute_virtual_trade(decision, price, keyword)
+                update_positions(price, keyword)
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (
@@ -334,8 +334,8 @@ content:
             evaluate_decisions()
             if price and price > 1000:
                 if decision["confidence"] > 75:
-                    execute_virtual_trade(decision, price)
-                update_positions(price)
+                    execute_virtual_trade(decision, price, name)
+                update_positions(price, name)
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (

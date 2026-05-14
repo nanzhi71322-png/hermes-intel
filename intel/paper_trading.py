@@ -77,7 +77,7 @@ def reset_paper_portfolio():
     }
 
 
-def execute_virtual_trade(decision, price):
+def execute_virtual_trade(decision, price, symbol):
     global balance
 
     _load_state()
@@ -103,6 +103,7 @@ def execute_virtual_trade(decision, price):
         "entry_price": entry_price,
         "type": action,
         "size": size,
+        "symbol": symbol,
         "timestamp": datetime.utcnow().isoformat(),
     }
 
@@ -112,19 +113,21 @@ def execute_virtual_trade(decision, price):
     return position
 
 
-def update_positions(current_price):
+def update_positions(current_price, symbol):
     global balance
     global last_update_price
 
     _load_state()
 
-    if last_update_price == current_price:
+    update_key = (symbol, current_price)
+
+    if last_update_price == update_key:
         return {
             "balance": balance,
             "open_positions": len(positions),
         }
 
-    last_update_price = current_price
+    last_update_price = update_key
 
     if not _valid_price(current_price):
         logger.info(f"[portfolio] balance: {balance:.2f} | open_positions: {len(positions)}")
@@ -137,6 +140,10 @@ def update_positions(current_price):
     open_positions = []
 
     for position in positions:
+        if position.get("symbol") != symbol:
+            open_positions.append(position)
+            continue
+
         entry_price = float(position["entry_price"])
         position_size = max(0.0, float(position.get("size", 0)))
 
