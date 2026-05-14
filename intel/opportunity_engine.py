@@ -1,10 +1,34 @@
+import time
+
+
+TRADE_COOLDOWN_SECONDS = 60
+last_trade_by_symbol = {}
+
+
 def _contains_any(text, terms):
     normalized = (text or "").lower()
     return any(term in normalized for term in terms)
 
 
-def generate_decision(signal, alpha, whale, narrative, text):
+def _cooldown_active(symbol):
+    if not symbol:
+        return False
+
+    last_trade = last_trade_by_symbol.get(symbol)
+    if last_trade is None:
+        return False
+
+    return time.time() - last_trade < TRADE_COOLDOWN_SECONDS
+
+
+def mark_trade_opened(symbol):
+    if symbol:
+        last_trade_by_symbol[symbol] = time.time()
+
+
+def generate_decision(signal, alpha, whale, narrative, text, symbol=None):
     alpha_score = alpha.get("alpha_score", 0)
+    signal_score = signal.get("score", 0)
     narrative_name = narrative.get("narrative", "unknown")
     whale_detected = whale.get("whale", False)
 
@@ -30,8 +54,22 @@ def generate_decision(signal, alpha, whale, narrative, text):
 
     bearish = _contains_any(text, bearish_terms)
     bullish = _contains_any(text, bullish_terms)
+    trade_allowed = (
+        alpha_score >= 70
+        and signal_score >= 75
+        and narrative_name not in ("unclear", "unknown")
+    )
 
-    if whale_detected and narrative_name in ("etf", "regulation") and alpha_score >= 75:
+    if _cooldown_active(symbol):
+        return {
+            "action": "watch",
+            "confidence": min(70, alpha_score),
+            "reason": "symbol cooldown active after recent trade",
+            "risk": "overtrading same symbol before signal has time to resolve",
+            "timeframe": "short",
+        }
+
+    if trade_allowed and whale_detected and narrative_name in ("etf", "regulation") and alpha_score >= 75:
         return {
             "action": "long",
             "confidence": min(95, alpha_score + 5),
@@ -40,7 +78,7 @@ def generate_decision(signal, alpha, whale, narrative, text):
             "timeframe": "short",
         }
 
-    if alpha_score >= 75 and (bearish or narrative_name == "macro"):
+    if trade_allowed and alpha_score >= 75 and (bearish or narrative_name == "macro"):
         return {
             "action": "short",
             "confidence": min(92, alpha_score),
@@ -49,7 +87,7 @@ def generate_decision(signal, alpha, whale, narrative, text):
             "timeframe": "short",
         }
 
-    if alpha_score >= 75 and bullish:
+    if trade_allowed and alpha_score >= 75 and bullish:
         return {
             "action": "long",
             "confidence": min(90, alpha_score),

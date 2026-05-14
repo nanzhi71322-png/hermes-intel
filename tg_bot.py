@@ -25,7 +25,7 @@ from config.settings import (
 from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
 from intel.feedback_engine import evaluate_decisions, extract_price_from_text, record_decision
 from intel.market_price import get_btc_price
-from intel.opportunity_engine import generate_decision
+from intel.opportunity_engine import generate_decision, mark_trade_opened
 from intel.paper_trading import execute_virtual_trade, update_positions
 from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
@@ -199,7 +199,7 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
-            decision = generate_decision(signal, alpha, whale, narrative, answer)
+            decision = generate_decision(signal, alpha, whale, narrative, answer, symbol=keyword)
             price = extract_price_from_text(answer)
             record_decision(
                 datetime.utcnow().isoformat(),
@@ -211,7 +211,14 @@ content:
             market_price = get_btc_price()
             if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
-                    execute_virtual_trade(decision, market_price, keyword)
+                    opened_position = execute_virtual_trade(decision, market_price, keyword)
+                    if opened_position:
+                        logger.info(
+                            f"[trade opened] action: {decision['action']} "
+                            f"confidence: {decision['confidence']} "
+                            f"alpha: {alpha['alpha_score']}"
+                        )
+                        mark_trade_opened(keyword)
                 update_positions(market_price, keyword)
             else:
                 logger.info("invalid price, skip trading")
@@ -325,7 +332,7 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
-            decision = generate_decision(signal, alpha, whale, narrative, answer)
+            decision = generate_decision(signal, alpha, whale, narrative, answer, symbol=name)
             price = extract_price_from_text(answer)
             record_decision(
                 datetime.utcnow().isoformat(),
@@ -337,7 +344,14 @@ content:
             market_price = get_btc_price()
             if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
-                    execute_virtual_trade(decision, market_price, name)
+                    opened_position = execute_virtual_trade(decision, market_price, name)
+                    if opened_position:
+                        logger.info(
+                            f"[trade opened] action: {decision['action']} "
+                            f"confidence: {decision['confidence']} "
+                            f"alpha: {alpha['alpha_score']}"
+                        )
+                        mark_trade_opened(name)
                 update_positions(market_price, name)
             else:
                 logger.info("invalid price, skip trading")
