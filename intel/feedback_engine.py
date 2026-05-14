@@ -21,6 +21,12 @@ PRICE_CONTEXT_TERMS = [
     "now",
     "reclaimed",
     "holding",
+    "near",
+    "around",
+    "hovering",
+    "sitting at",
+    "just above",
+    "just below",
 ]
 BTC_CONTEXT_TERMS = [
     "btc",
