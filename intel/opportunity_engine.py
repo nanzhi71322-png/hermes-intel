@@ -1,8 +1,12 @@
 import time
 
+from loguru import logger
+
 
 TRADE_COOLDOWN_SECONDS = 60
+MOMENTUM_NOISE_THRESHOLD = 0.001
 last_trade_by_symbol = {}
+last_price_by_symbol = {}
 
 
 def _contains_any(text, terms):
@@ -26,11 +30,45 @@ def mark_trade_opened(symbol):
         last_trade_by_symbol[symbol] = time.time()
 
 
-def generate_decision(signal, alpha, whale, narrative, text, symbol=None):
+def _price_momentum(symbol, current_price):
+    if not symbol or current_price is None:
+        return None
+
+    previous_price = last_price_by_symbol.get(symbol)
+    last_price_by_symbol[symbol] = current_price
+
+    if previous_price is None:
+        return None
+
+    momentum = current_price - previous_price
+    direction = "up" if momentum > 0 else "down"
+    logger.info(f"[momentum] value: {momentum:.2f} direction: {direction}")
+
+    return momentum
+
+
+def _momentum_allows(action, momentum, current_price):
+    if action not in ("long", "short"):
+        return True
+
+    if momentum is None or current_price is None:
+        return False
+
+    if abs(momentum / current_price) < MOMENTUM_NOISE_THRESHOLD:
+        return False
+
+    if action == "long":
+        return momentum > 0
+
+    return momentum < 0
+
+
+def generate_decision(signal, alpha, whale, narrative, text, symbol=None, current_price=None):
     alpha_score = alpha.get("alpha_score", 0)
     signal_score = signal.get("score", 0)
     narrative_name = narrative.get("narrative", "unknown")
     whale_detected = whale.get("whale", False)
+    momentum = _price_momentum(symbol, current_price)
 
     bearish_terms = [
         "liquidation",
@@ -69,7 +107,13 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None):
             "timeframe": "short",
         }
 
-    if trade_allowed and whale_detected and narrative_name in ("etf", "regulation") and alpha_score >= 75:
+    if (
+        trade_allowed
+        and whale_detected
+        and narrative_name in ("etf", "regulation")
+        and alpha_score >= 75
+        and _momentum_allows("long", momentum, current_price)
+    ):
         return {
             "action": "long",
             "confidence": min(95, alpha_score + 5),
@@ -78,7 +122,12 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None):
             "timeframe": "short",
         }
 
-    if trade_allowed and alpha_score >= 75 and (bearish or narrative_name == "macro"):
+    if (
+        trade_allowed
+        and alpha_score >= 75
+        and (bearish or narrative_name == "macro")
+        and _momentum_allows("short", momentum, current_price)
+    ):
         return {
             "action": "short",
             "confidence": min(92, alpha_score),
@@ -87,7 +136,12 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None):
             "timeframe": "short",
         }
 
-    if trade_allowed and alpha_score >= 75 and bullish:
+    if (
+        trade_allowed
+        and alpha_score >= 75
+        and bullish
+        and _momentum_allows("long", momentum, current_price)
+    ):
         return {
             "action": "long",
             "confidence": min(90, alpha_score),

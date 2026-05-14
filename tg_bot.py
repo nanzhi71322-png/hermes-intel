@@ -199,7 +199,16 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
-            decision = generate_decision(signal, alpha, whale, narrative, answer, symbol=keyword)
+            market_price = get_btc_price()
+            decision = generate_decision(
+                signal,
+                alpha,
+                whale,
+                narrative,
+                answer,
+                symbol=keyword,
+                current_price=market_price,
+            )
             price = extract_price_from_text(answer)
             record_decision(
                 datetime.utcnow().isoformat(),
@@ -208,7 +217,6 @@ content:
                 keyword,
             )
             evaluate_decisions()
-            market_price = get_btc_price()
             if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
                     opened_position = execute_virtual_trade(decision, market_price, keyword)
@@ -332,7 +340,16 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
-            decision = generate_decision(signal, alpha, whale, narrative, answer, symbol=name)
+            market_price = get_btc_price()
+            decision = generate_decision(
+                signal,
+                alpha,
+                whale,
+                narrative,
+                answer,
+                symbol=name,
+                current_price=market_price,
+            )
             price = extract_price_from_text(answer)
             record_decision(
                 datetime.utcnow().isoformat(),
@@ -341,7 +358,6 @@ content:
                 name,
             )
             evaluate_decisions()
-            market_price = get_btc_price()
             if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
                     opened_position = execute_virtual_trade(decision, market_price, name)
