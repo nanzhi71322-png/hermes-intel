@@ -20,6 +20,7 @@ from config.settings import (
     TASKS_FILE,
     ensure_runtime_dirs,
 )
+from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
 from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
 from utils.logging import setup_logging
@@ -184,6 +185,14 @@ content:
                 f"[signal: {signal['level'].upper()} {signal['score']}] "
                 f"{signal['reason']}"
             )
+            whale = detect_whale_activity(answer)
+            narrative = detect_narrative(answer)
+            alpha = compute_alpha(signal, whale, narrative)
+            alpha_prefix = (
+                f"[alpha: {alpha['alpha_score']} | "
+                f"whale: {'yes' if whale['whale'] else 'no'} | "
+                f"narrative: {narrative['narrative']}]"
+            )
 
             if signal["level"] not in ("high", "critical") and signal["score"] < 70:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
@@ -191,7 +200,7 @@ content:
 
             await app.bot.send_message(
                 chat_id=chat_id,
-                text=f"{signal_prefix}\n[autonomous: {keyword}]\n\n{answer}"
+                text=f"{signal_prefix}\n{alpha_prefix}\n[autonomous: {keyword}]\n\n{answer}"
             )
 
         except Exception as e:
@@ -279,6 +288,14 @@ content:
                 f"[signal: {signal['level'].upper()} {signal['score']}] "
                 f"{signal['reason']}"
             )
+            whale = detect_whale_activity(answer)
+            narrative = detect_narrative(answer)
+            alpha = compute_alpha(signal, whale, narrative)
+            alpha_prefix = (
+                f"[alpha: {alpha['alpha_score']} | "
+                f"whale: {'yes' if whale['whale'] else 'no'} | "
+                f"narrative: {narrative['narrative']}]"
+            )
 
             if signal["level"] not in ("high", "critical") and signal["score"] < 70:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
@@ -286,7 +303,7 @@ content:
 
             await app.bot.send_message(
                 chat_id=chat_id,
-                text=f"{signal_prefix}\n[agent:{name}]\n\n{answer}"
+                text=f"{signal_prefix}\n{alpha_prefix}\n[agent:{name}]\n\n{answer}"
             )
 
         except Exception as e:
