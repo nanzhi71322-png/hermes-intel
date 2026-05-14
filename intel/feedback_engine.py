@@ -9,31 +9,95 @@ from config.settings import BOT_HOME
 
 FEEDBACK_FILE = os.path.join(BOT_HOME, "decision_feedback.jsonl")
 PRICE_PATTERNS = [
-    re.compile(r"\$\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?)"),
-    re.compile(r"\bbtc\s+(?:at|around|near)\s+(\d+(?:\.\d+)?)\s*k\b", re.IGNORECASE),
-    re.compile(r"\b(\d{4,6}(?:\.\d+)?)\b"),
+    re.compile(r"\$\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(k)?", re.IGNORECASE),
+    re.compile(r"\b(\d+(?:\.\d+)?)\s*k\b", re.IGNORECASE),
+    re.compile(r"\b(\d{5,6}(?:\.\d+)?)\b"),
+]
+PRICE_CONTEXT_TERMS = [
+    "btc",
+    "bitcoin",
+    "currently",
+    "trading at",
+    "price",
+    "reclaimed",
+    "dropped to",
+    "below",
+    "above",
+]
+BTC_CONTEXT_TERMS = [
+    "btc",
+    "bitcoin",
+]
+IGNORE_PRICE_TERMS = [
+    "target",
+    "prediction",
+    "forecast",
+    "by 2026",
+    "ath",
+    "support",
+    "resistance",
+    "next",
+    "$500k",
+    "$1t",
+    "10x",
+    "100x",
 ]
 
 
 def extract_price_from_text(text):
     raw = text or ""
+    normalized = raw.lower()
+    candidates = []
 
     for pattern in PRICE_PATTERNS:
-        match = pattern.search(raw)
-        if not match:
-            continue
+        for match in pattern.finditer(raw):
+            start, end = match.span()
+            window_start = max(0, start - 80)
+            window_end = min(len(raw), end + 80)
+            window = normalized[window_start:window_end]
 
-        value = match.group(1).replace(",", "")
+            if any(term in window for term in IGNORE_PRICE_TERMS):
+                continue
 
-        try:
-            price = float(value)
-        except ValueError:
-            continue
+            if not any(term in window for term in PRICE_CONTEXT_TERMS):
+                continue
 
-        if "k" in match.group(0).lower():
-            price *= 1000
+            value = match.group(1).replace(",", "")
 
-        return price
+            try:
+                price = float(value)
+            except ValueError:
+                continue
+
+            has_k_suffix = bool(match.group(2)) if len(match.groups()) > 1 else "k" in match.group(0).lower()
+            if has_k_suffix:
+                price *= 1000
+
+            if price < 30000 or price > 150000:
+                continue
+
+            btc_distance = None
+            for term in BTC_CONTEXT_TERMS:
+                term_index = normalized.rfind(term, 0, start)
+                if term_index != -1:
+                    distance = start - term_index
+                    btc_distance = distance if btc_distance is None else min(btc_distance, distance)
+
+                term_index = normalized.find(term, end)
+                if term_index != -1:
+                    distance = term_index - end
+                    btc_distance = distance if btc_distance is None else min(btc_distance, distance)
+
+            if btc_distance is None:
+                continue
+
+            candidates.append((btc_distance, price))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1]
 
     return None
 
