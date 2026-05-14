@@ -1,6 +1,8 @@
 import asyncio
 import json
 
+from datetime import datetime
+
 from loguru import logger
 
 from telegram.error import Conflict
@@ -21,7 +23,9 @@ from config.settings import (
     ensure_runtime_dirs,
 )
 from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
+from intel.feedback_engine import evaluate_decisions, extract_price_from_text, record_decision
 from intel.opportunity_engine import generate_decision
+from intel.paper_trading import execute_virtual_trade, update_positions
 from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
 from utils.logging import setup_logging
@@ -195,6 +199,20 @@ content:
                 f"narrative: {narrative['narrative']}]"
             )
             decision = generate_decision(signal, alpha, whale, narrative, answer)
+            price = extract_price_from_text(answer)
+            record_decision(
+                datetime.utcnow().isoformat(),
+                {**decision, "narrative": narrative["narrative"]},
+                price,
+                keyword,
+            )
+            evaluate_decisions()
+            if price and price > 1000:
+                if decision["confidence"] > 75:
+                    execute_virtual_trade(decision, price)
+                update_positions(price)
+            else:
+                logger.info("invalid price, skip trading")
             decision_prefix = (
                 f"[decision: {decision['action'].upper()} | "
                 f"confidence: {decision['confidence']} | "
@@ -306,6 +324,20 @@ content:
                 f"narrative: {narrative['narrative']}]"
             )
             decision = generate_decision(signal, alpha, whale, narrative, answer)
+            price = extract_price_from_text(answer)
+            record_decision(
+                datetime.utcnow().isoformat(),
+                {**decision, "narrative": narrative["narrative"]},
+                price,
+                name,
+            )
+            evaluate_decisions()
+            if price and price > 1000:
+                if decision["confidence"] > 75:
+                    execute_virtual_trade(decision, price)
+                update_positions(price)
+            else:
+                logger.info("invalid price, skip trading")
             decision_prefix = (
                 f"[decision: {decision['action'].upper()} | "
                 f"confidence: {decision['confidence']} | "

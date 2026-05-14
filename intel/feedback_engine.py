@@ -1,0 +1,226 @@
+import json
+import os
+import re
+
+from loguru import logger
+
+from config.settings import BOT_HOME
+
+
+FEEDBACK_FILE = os.path.join(BOT_HOME, "decision_feedback.jsonl")
+PRICE_PATTERNS = [
+    re.compile(r"\$\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?)"),
+    re.compile(r"\bbtc\s+(?:at|around|near)\s+(\d+(?:\.\d+)?)\s*k\b", re.IGNORECASE),
+    re.compile(r"\b(\d{4,6}(?:\.\d+)?)\b"),
+]
+
+
+def extract_price_from_text(text):
+    raw = text or ""
+
+    for pattern in PRICE_PATTERNS:
+        match = pattern.search(raw)
+        if not match:
+            continue
+
+        value = match.group(1).replace(",", "")
+
+        try:
+            price = float(value)
+        except ValueError:
+            continue
+
+        if "k" in match.group(0).lower():
+            price *= 1000
+
+        return price
+
+    return None
+
+
+def record_decision(timestamp, decision, price_at_decision, symbol):
+    record = {
+        "timestamp": timestamp,
+        "symbol": symbol,
+        "action": decision.get("action"),
+        "confidence": decision.get("confidence"),
+        "price": price_at_decision,
+        "narrative": decision.get("narrative", "unknown"),
+        "timeframe": decision.get("timeframe"),
+    }
+
+    with open(FEEDBACK_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=True) + "\n")
+
+    return record
+
+
+def _load_decisions():
+    if not os.path.exists(FEEDBACK_FILE):
+        return []
+
+    decisions = []
+
+    with open(FEEDBACK_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                decisions.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    return decisions
+
+
+def _write_decisions(decisions):
+    with open(FEEDBACK_FILE, "w", encoding="utf-8") as f:
+        for decision in decisions:
+            f.write(json.dumps(decision, ensure_ascii=True) + "\n")
+
+
+def evaluate_outcome(decision, current_price):
+    entry_price = decision.get("price")
+    action = decision.get("action")
+
+    if entry_price is None or current_price is None:
+        return {
+            "result": "neutral",
+            "pnl_estimate": "0.00%",
+            "correct": False,
+        }
+
+    try:
+        entry_price = float(entry_price)
+        current_price = float(current_price)
+    except (TypeError, ValueError):
+        return {
+            "result": "neutral",
+            "pnl_estimate": "0.00%",
+            "correct": False,
+        }
+
+    if entry_price == 0:
+        pnl = 0
+    elif action == "short":
+        pnl = ((entry_price - current_price) / entry_price) * 100
+    else:
+        pnl = ((current_price - entry_price) / entry_price) * 100
+
+    if action == "long":
+        correct = current_price > entry_price
+    elif action == "short":
+        correct = current_price < entry_price
+    else:
+        correct = False
+
+    if abs(pnl) < 0.1:
+        result = "neutral"
+    elif correct:
+        result = "win"
+    else:
+        result = "loss"
+
+    return {
+        "result": result,
+        "pnl_estimate": f"{pnl:.2f}%",
+        "correct": correct,
+    }
+
+
+def evaluate_decisions():
+    decisions = _load_decisions()
+    evaluations = []
+    changed = False
+
+    for decision in decisions:
+        if decision.get("result"):
+            continue
+
+        if decision.get("price") is None:
+            continue
+
+        current_price = decision.get("current_price")
+        if current_price is None:
+            continue
+
+        outcome = evaluate_outcome(decision, current_price)
+
+        decision.update({
+            "current_price": current_price,
+            "result": outcome["result"],
+            "pnl_estimate": outcome["pnl_estimate"],
+            "correct": outcome["correct"],
+        })
+
+        evaluations.append({
+            "result": outcome["result"],
+            "correct": outcome["correct"],
+        })
+        changed = True
+
+    if changed:
+        _write_decisions(decisions)
+        stats = compute_statistics()
+        if stats["total_trades"] and stats["total_trades"] % 10 == 0:
+            logger.info(
+                "performance summary: "
+                f"total={stats['total_trades']} "
+                f"long_win_rate={stats['long_win_rate']}% "
+                f"short_win_rate={stats['short_win_rate']}% "
+                f"best_narrative={stats['best_narrative']} "
+                f"worst_narrative={stats['worst_narrative']}"
+            )
+
+    return evaluations
+
+
+def _win_rate(records):
+    if not records:
+        return 0
+
+    wins = sum(1 for record in records if record.get("correct") is True)
+    return round((wins / len(records)) * 100, 2)
+
+
+def compute_statistics():
+    decisions = _load_decisions()
+    evaluated = [decision for decision in decisions if decision.get("result")]
+
+    long_records = [decision for decision in evaluated if decision.get("action") == "long"]
+    short_records = [decision for decision in evaluated if decision.get("action") == "short"]
+
+    narrative_scores = {}
+
+    for decision in evaluated:
+        narrative = decision.get("narrative") or "unknown"
+        if narrative not in narrative_scores:
+            narrative_scores[narrative] = {
+                "total": 0,
+                "wins": 0,
+            }
+
+        narrative_scores[narrative]["total"] += 1
+        if decision.get("correct") is True:
+            narrative_scores[narrative]["wins"] += 1
+
+    best_narrative = "unknown"
+    worst_narrative = "unknown"
+
+    if narrative_scores:
+        ranked = sorted(
+            narrative_scores.items(),
+            key=lambda item: item[1]["wins"] / item[1]["total"],
+        )
+        worst_narrative = ranked[0][0]
+        best_narrative = ranked[-1][0]
+
+    return {
+        "long_win_rate": _win_rate(long_records),
+        "short_win_rate": _win_rate(short_records),
+        "total_trades": len(evaluated),
+        "best_narrative": best_narrative,
+        "worst_narrative": worst_narrative,
+    }
