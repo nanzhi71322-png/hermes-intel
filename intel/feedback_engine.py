@@ -21,6 +21,10 @@ IGNORE_PRICE_TERMS = [
     "target",
     "prediction",
     "forecast",
+    "could",
+    "might",
+    "will",
+    "expect",
     "scenario",
 ]
 
@@ -28,6 +32,7 @@ IGNORE_PRICE_TERMS = [
 def extract_price_from_text(text):
     raw = text or ""
     normalized = raw.lower()
+    candidates = []
 
     if not any(term in normalized for term in BTC_CONTEXT_TERMS):
         return None
@@ -35,9 +40,19 @@ def extract_price_from_text(text):
     for pattern in PRICE_PATTERNS:
         for match in pattern.finditer(raw):
             start, end = match.span()
-            window_start = max(0, start - 80)
-            window_end = min(len(raw), end + 80)
+            window_start = max(0, start - 50)
+            window_end = min(len(raw), end + 50)
             window = normalized[window_start:window_end]
+
+            btc_positions = []
+            for term in BTC_CONTEXT_TERMS:
+                term_index = window.find(term)
+                while term_index != -1:
+                    btc_positions.append(window_start + term_index)
+                    term_index = window.find(term, term_index + len(term))
+
+            if not btc_positions:
+                continue
 
             if any(term in window for term in IGNORE_PRICE_TERMS):
                 continue
@@ -54,7 +69,15 @@ def extract_price_from_text(text):
                 price *= 1000
 
             if 30000 <= price <= 150000:
-                return price
+                distance = min(abs(start - btc_position) for btc_position in btc_positions)
+                if distance < 50:
+                    candidates.append((distance, price))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1]
 
     return None
 
