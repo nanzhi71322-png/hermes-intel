@@ -21,6 +21,7 @@ from config.settings import (
     ensure_runtime_dirs,
 )
 from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
+from intel.opportunity_engine import generate_decision
 from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
 from utils.logging import setup_logging
@@ -193,6 +194,14 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
+            decision = generate_decision(signal, alpha, whale, narrative, answer)
+            decision_prefix = (
+                f"[decision: {decision['action'].upper()} | "
+                f"confidence: {decision['confidence']} | "
+                f"timeframe: {decision['timeframe']}]\n"
+                f"reason: {decision['reason']}\n"
+                f"risk: {decision['risk']}"
+            )
 
             if signal["level"] not in ("high", "critical") and signal["score"] < 70:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
@@ -200,7 +209,7 @@ content:
 
             await app.bot.send_message(
                 chat_id=chat_id,
-                text=f"{signal_prefix}\n{alpha_prefix}\n[autonomous: {keyword}]\n\n{answer}"
+                text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[autonomous: {keyword}]\n\n{answer}"
             )
 
         except Exception as e:
@@ -296,6 +305,14 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
+            decision = generate_decision(signal, alpha, whale, narrative, answer)
+            decision_prefix = (
+                f"[decision: {decision['action'].upper()} | "
+                f"confidence: {decision['confidence']} | "
+                f"timeframe: {decision['timeframe']}]\n"
+                f"reason: {decision['reason']}\n"
+                f"risk: {decision['risk']}"
+            )
 
             if signal["level"] not in ("high", "critical") and signal["score"] < 70:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
@@ -303,7 +320,7 @@ content:
 
             await app.bot.send_message(
                 chat_id=chat_id,
-                text=f"{signal_prefix}\n{alpha_prefix}\n[agent:{name}]\n\n{answer}"
+                text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[agent:{name}]\n\n{answer}"
             )
 
         except Exception as e:
