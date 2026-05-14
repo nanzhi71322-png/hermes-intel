@@ -10,6 +10,8 @@ DATA_DIR = "data"
 PORTFOLIO_FILE = os.path.join(DATA_DIR, "paper_portfolio.json")
 STARTING_BALANCE = 100.0
 MAX_OPEN_POSITIONS = 3
+MIN_UPDATE_AGE_SECONDS = 30
+POSITION_TTL_SECONDS = 300
 
 balance = STARTING_BALANCE
 positions = []
@@ -146,9 +148,15 @@ def update_positions(current_price, symbol):
 
         entry_price = float(position["entry_price"])
         position_size = max(0.0, float(position.get("size", 0)))
+        opened_at = datetime.fromisoformat(position["timestamp"])
+        age_seconds = (datetime.utcnow() - opened_at).total_seconds()
 
-        if abs(current_price - entry_price) / entry_price > 0.25:
-            logger.info("abnormal price deviation >25%, skip pnl update")
+        if age_seconds <= MIN_UPDATE_AGE_SECONDS:
+            open_positions.append(position)
+            continue
+
+        if abs(current_price - entry_price) / entry_price > 0.6:
+            logger.info("abnormal price deviation >60%, skip pnl update")
             open_positions.append(position)
             continue
 
@@ -165,9 +173,10 @@ def update_positions(current_price, symbol):
             open_positions.append(position)
             continue
 
-        if pnl_pct >= 0.03 or pnl_pct <= -0.02:
+        if pnl_pct >= 0.03 or pnl_pct <= -0.02 or age_seconds > POSITION_TTL_SECONDS:
             pnl = position_size * pnl_pct
             balance = max(0.0, balance + pnl)
+            logger.info(f"[trade closed] pnl: {pnl:.2f} balance: {balance:.2f}")
         else:
             open_positions.append(position)
 
