@@ -1,29 +1,103 @@
+import json
+import os
+
 from datetime import datetime
 
 from loguru import logger
 
 
-balance = 100.0
+DATA_DIR = "data"
+PORTFOLIO_FILE = os.path.join(DATA_DIR, "paper_portfolio.json")
+STARTING_BALANCE = 100.0
+MAX_OPEN_POSITIONS = 3
+
+balance = STARTING_BALANCE
 positions = []
+last_update_price = None
+
+
+def _valid_price(price):
+    if price is None:
+        return False
+
+    try:
+        price = float(price)
+    except (TypeError, ValueError):
+        return False
+
+    return 1000 < price <= 300000
+
+
+def _load_state():
+    global balance
+    global positions
+
+    if not os.path.exists(PORTFOLIO_FILE):
+        return
+
+    try:
+        with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return
+
+    try:
+        loaded_balance = float(state.get("balance", STARTING_BALANCE))
+    except (TypeError, ValueError):
+        loaded_balance = STARTING_BALANCE
+
+    balance = max(0.0, loaded_balance)
+    positions = [
+        position for position in state.get("positions", [])
+        if position.get("size", 0) >= 0
+    ][:MAX_OPEN_POSITIONS]
+
+
+def _save_state():
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+        json.dump({
+            "balance": balance,
+            "positions": positions,
+        }, f, ensure_ascii=True, indent=2)
+
+
+def reset_paper_portfolio():
+    global balance
+    global positions
+
+    balance = STARTING_BALANCE
+    positions = []
+    _save_state()
+
+    return {
+        "balance": balance,
+        "open_positions": len(positions),
+    }
 
 
 def execute_virtual_trade(decision, price):
     global balance
 
+    _load_state()
+
     action = decision.get("action")
 
-    if action not in ("long", "short") or price is None:
+    if action not in ("long", "short") or not _valid_price(price):
         return None
 
-    try:
-        entry_price = float(price)
-    except (TypeError, ValueError):
+    if balance <= 0:
         return None
 
-    if entry_price <= 0:
+    if len(positions) >= MAX_OPEN_POSITIONS:
         return None
 
-    size = balance * 0.10
+    entry_price = float(price)
+    size = min(balance * 0.10, balance)
+
+    if size <= 0:
+        return None
 
     position = {
         "entry_price": entry_price,
@@ -33,44 +107,60 @@ def execute_virtual_trade(decision, price):
     }
 
     positions.append(position)
+    _save_state()
+
     return position
 
 
 def update_positions(current_price):
     global balance
+    global last_update_price
 
-    if current_price is None:
+    _load_state()
+
+    if last_update_price == current_price:
+        return {
+            "balance": balance,
+            "open_positions": len(positions),
+        }
+
+    last_update_price = current_price
+
+    if not _valid_price(current_price):
         logger.info(f"[portfolio] balance: {balance:.2f} | open_positions: {len(positions)}")
         return {
             "balance": balance,
             "open_positions": len(positions),
         }
 
-    try:
-        price = float(current_price)
-    except (TypeError, ValueError):
-        logger.info(f"[portfolio] balance: {balance:.2f} | open_positions: {len(positions)}")
-        return {
-            "balance": balance,
-            "open_positions": len(positions),
-        }
-
+    price = float(current_price)
     open_positions = []
 
     for position in positions:
-        entry_price = position["entry_price"]
+        entry_price = float(position["entry_price"])
+        position_size = max(0.0, float(position.get("size", 0)))
+
+        if position_size <= 0 or entry_price <= 0:
+            continue
 
         if position["type"] == "short":
-            pnl_pct = ((entry_price - price) / entry_price) * 100
+            pnl_pct = (entry_price - price) / entry_price
         else:
-            pnl_pct = ((price - entry_price) / entry_price) * 100
+            pnl_pct = (price - entry_price) / entry_price
 
-        if pnl_pct > 3 or pnl_pct < -2:
-            balance += position["size"] * (pnl_pct / 100)
+        if abs(pnl_pct) > 0.20:
+            logger.info("invalid pnl jump, skip update")
+            open_positions.append(position)
+            continue
+
+        if pnl_pct >= 0.03 or pnl_pct <= -0.02:
+            pnl = position_size * pnl_pct
+            balance = max(0.0, balance + pnl)
         else:
             open_positions.append(position)
 
-    positions[:] = open_positions
+    positions[:] = open_positions[:MAX_OPEN_POSITIONS]
+    _save_state()
 
     logger.info(f"[portfolio] balance: {balance:.2f} | open_positions: {len(positions)}")
 
@@ -78,3 +168,6 @@ def update_positions(current_price):
         "balance": balance,
         "open_positions": len(positions),
     }
+
+
+_load_state()
