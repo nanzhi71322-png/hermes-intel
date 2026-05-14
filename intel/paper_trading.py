@@ -129,8 +129,8 @@ def update_positions(current_price, symbol):
 
     last_update_price = update_key
 
-    if not _valid_price(current_price):
-        logger.info(f"[portfolio] balance: {balance:.2f} | open_positions: {len(positions)}")
+    if not current_price or current_price < 30000 or current_price > 150000:
+        logger.info("invalid price range, skip update")
         return {
             "balance": balance,
             "open_positions": len(positions),
@@ -146,6 +146,11 @@ def update_positions(current_price, symbol):
 
         entry_price = float(position["entry_price"])
         position_size = max(0.0, float(position.get("size", 0)))
+
+        if abs(current_price - entry_price) / entry_price > 0.25:
+            logger.info("abnormal price deviation >25%, skip pnl update")
+            open_positions.append(position)
+            continue
 
         if position_size <= 0 or entry_price <= 0:
             continue
