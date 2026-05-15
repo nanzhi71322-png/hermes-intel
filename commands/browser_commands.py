@@ -33,6 +33,31 @@ preview:
 """
 
 
+def is_bad_x_page(text):
+    normalized = (text or "").lower()
+    bad_terms = [
+        "something went wrong. try reloading.",
+        "search filters",
+        "advanced search",
+    ]
+    tweet_like_terms = [
+        "@",
+        " repost",
+        " reposts",
+        " reply",
+        " replies",
+        " like",
+        " likes",
+        " views",
+        "·",
+    ]
+
+    return (
+        any(term in normalized for term in bad_terms)
+        and not any(term in normalized for term in tweet_like_terms)
+    )
+
+
 async def open_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("usage: /open target")
@@ -149,7 +174,11 @@ async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with browser_command_lock("search", keyword):
         result = await browser_open(url)
 
-    await update.message.reply_text(format_browser_snapshot(result)[:4000])
+    output = format_browser_snapshot(result)
+    if is_bad_x_page(result.get("preview", "")):
+        output = f"{output}\n[data_quality: bad_x_page]"
+
+    await update.message.reply_text(output[:4000])
 
 
 async def read_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -344,6 +373,11 @@ async def intel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await browser_manager.browser_page.wait_for_timeout(1500)
 
             body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
+
+        if is_bad_x_page(body):
+            logger.info("[x quality] bad page, skip analysis")
+            await update.message.reply_text("[data_quality: bad_x_page] X search page did not load enough content.")
+            return
 
         if len(body) > 16000:
             body = body[:16000]

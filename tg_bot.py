@@ -68,6 +68,31 @@ AGENT_PROFILES = {
 }
 
 
+def is_bad_x_page(text):
+    normalized = (text or "").lower()
+    bad_terms = [
+        "something went wrong. try reloading.",
+        "search filters",
+        "advanced search",
+    ]
+    tweet_like_terms = [
+        "@",
+        " repost",
+        " reposts",
+        " reply",
+        " replies",
+        " like",
+        " likes",
+        " views",
+        "·",
+    ]
+
+    return (
+        any(term in normalized for term in bad_terms)
+        and not any(term in normalized for term in tweet_like_terms)
+    )
+
+
 def is_allowed(update):
     chat = update.effective_chat
     return bool(chat and chat.id in ALLOWED_CHAT_IDS)
@@ -160,6 +185,11 @@ async def autonomous_loop(chat_id, keyword):
                 await browser_manager.browser_page.wait_for_timeout(2000)
 
                 body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
+
+            if is_bad_x_page(body):
+                logger.info("[x quality] bad page, skip analysis")
+                await asyncio.sleep(300)
+                continue
 
             body = filter_new_signals(keyword, body)
 
@@ -306,6 +336,11 @@ async def agent_loop(chat_id, name):
                     await browser_manager.browser_page.wait_for_timeout(1500)
 
                 body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
+
+            if is_bad_x_page(body):
+                logger.info("[x quality] bad page, skip analysis")
+                await asyncio.sleep(300)
+                continue
 
             body = filter_new_signals(f"agent:{name}", body)
 
