@@ -255,7 +255,7 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
-                if decision["confidence"] > 75:
+                if decision["confidence"] >= 80:
                     opened_position = execute_virtual_trade(
                         decision,
                         market_price,
@@ -413,7 +413,7 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
-                if decision["confidence"] > 75:
+                if decision["confidence"] >= 80:
                     opened_position = execute_virtual_trade(
                         decision,
                         market_price,

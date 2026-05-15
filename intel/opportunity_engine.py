@@ -63,6 +63,41 @@ def _momentum_allows(action, momentum, current_price):
     return momentum < 0
 
 
+def _momentum_is_weak(momentum, current_price):
+    if momentum is None or current_price is None:
+        return True
+
+    return abs(momentum / current_price) < MOMENTUM_NOISE_THRESHOLD
+
+
+def _adjust_confidence_for_momentum(confidence, momentum, current_price):
+    if _momentum_is_weak(momentum, current_price):
+        return max(0, confidence - 10)
+
+    return confidence
+
+
+def _trade_or_watch(action, confidence, reason, risk, timeframe, momentum, current_price):
+    confidence = _adjust_confidence_for_momentum(confidence, momentum, current_price)
+
+    if confidence < 80:
+        return {
+            "action": "watch",
+            "confidence": confidence,
+            "reason": "trade confidence below minimum after momentum adjustment",
+            "risk": risk,
+            "timeframe": timeframe,
+        }
+
+    return {
+        "action": action,
+        "confidence": confidence,
+        "reason": reason,
+        "risk": risk,
+        "timeframe": timeframe,
+    }
+
+
 def generate_decision(signal, alpha, whale, narrative, text, symbol=None, current_price=None):
     alpha_score = alpha.get("alpha_score", 0)
     signal_score = signal.get("score", 0)
@@ -101,10 +136,11 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
 
     bearish = _contains_any(text, bearish_terms)
     bullish = _contains_any(text, bullish_terms)
-    strong_momentum = momentum is not None and abs(momentum) > 50
+    has_trade_catalyst = whale_detected or narrative_name in ("etf", "regulation", "macro")
     trade_allowed = (
-        (alpha_score >= 60 and signal_score >= 55)
-        or (strong_momentum and alpha_score >= 60 and signal_score >= 45)
+        alpha_score >= 75
+        and signal_score >= 70
+        and has_trade_catalyst
     )
 
     if _cooldown_active(symbol):
@@ -123,13 +159,15 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
         and alpha_score >= 75
         and _momentum_allows("long", momentum, current_price)
     ):
-        return {
-            "action": "long",
-            "confidence": min(95, alpha_score + 5),
-            "reason": "whale activity aligns with bullish institutional or regulatory narrative",
-            "risk": "macro reversal, fake breakout, or headline being misread by the market",
-            "timeframe": "short",
-        }
+        return _trade_or_watch(
+            "long",
+            min(95, alpha_score + 5),
+            "whale activity aligns with bullish institutional or regulatory narrative",
+            "macro reversal, fake breakout, or headline being misread by the market",
+            "short",
+            momentum,
+            current_price,
+        )
 
     if (
         trade_allowed
@@ -137,13 +175,15 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
         and (bearish or narrative_name == "macro")
         and _momentum_allows("short", momentum, current_price)
     ):
-        return {
-            "action": "short",
-            "confidence": min(92, alpha_score),
-            "reason": "strong negative or macro-sensitive signal with elevated alpha score",
-            "risk": "short squeeze, fast policy reversal, or liquidation exhaustion",
-            "timeframe": "short",
-        }
+        return _trade_or_watch(
+            "short",
+            min(92, alpha_score),
+            "strong negative or macro-sensitive signal with elevated alpha score",
+            "short squeeze, fast policy reversal, or liquidation exhaustion",
+            "short",
+            momentum,
+            current_price,
+        )
 
     if (
         trade_allowed
@@ -151,13 +191,15 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
         and bullish
         and _momentum_allows("long", momentum, current_price)
     ):
-        return {
-            "action": "long",
-            "confidence": min(90, alpha_score),
-            "reason": "strong bullish market signal with elevated alpha score",
-            "risk": "fake breakout, delayed confirmation, or crowded positioning",
-            "timeframe": "short",
-        }
+        return _trade_or_watch(
+            "long",
+            min(90, alpha_score),
+            "strong bullish market signal with elevated alpha score",
+            "fake breakout, delayed confirmation, or crowded positioning",
+            "short",
+            momentum,
+            current_price,
+        )
 
     if 60 <= alpha_score < 75:
         return {
