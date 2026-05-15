@@ -184,7 +184,8 @@ content:
 {body}
 """
 
-            response = client.chat.completions.create(
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
                 model=DEEPSEEK_MODEL,
                 messages=[
                     {
@@ -336,7 +337,8 @@ content:
 {body}
 """
 
-            response = client.chat.completions.create(
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
                 model=DEEPSEEK_MODEL,
                 messages=[
                     {
