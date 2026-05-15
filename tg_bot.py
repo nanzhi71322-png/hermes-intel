@@ -5,8 +5,9 @@ from datetime import datetime
 
 from loguru import logger
 
+from telegram import Update
 from telegram.error import Conflict
-from telegram.ext import ApplicationBuilder
+from telegram.ext import ApplicationBuilder, ApplicationHandlerStop, TypeHandler
 
 import browser.manager as browser_manager
 from browser.manager import (
@@ -17,6 +18,7 @@ from browser.manager import (
 from commands import register_handlers
 from config.clients import llm_client as client
 from config.settings import (
+    ALLOWED_CHAT_IDS,
     BOT_TOKEN,
     DEEPSEEK_MODEL,
     TASKS_FILE,
@@ -64,6 +66,22 @@ AGENT_PROFILES = {
         "focus": "urgent news, exchange issues, hacks, regulation, ETF, liquidation cascades, major announcements"
     }
 }
+
+
+def is_allowed(update):
+    chat = update.effective_chat
+    return bool(chat and chat.id in ALLOWED_CHAT_IDS)
+
+
+async def access_control(update, context):
+    if is_allowed(update):
+        return
+
+    if update.effective_message:
+        await update.effective_message.reply_text("unauthorized")
+
+    raise ApplicationHandlerStop
+
 
 def save_autonomous_tasks():
     data = []
@@ -430,6 +448,7 @@ content:
 def main():
     global app
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(TypeHandler(Update, access_control), group=-1)
 
     register_handlers(
         app,

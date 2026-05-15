@@ -42,6 +42,11 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 BOT_TOKEN = TELEGRAM_BOT_TOKEN
+ALLOWED_CHAT_IDS = {
+    int(chat_id.strip())
+    for chat_id in os.getenv("ALLOWED_CHAT_IDS", "").split(",")
+    if chat_id.strip()
+}
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_BASE_URL = os.getenv(
