@@ -70,27 +70,14 @@ AGENT_PROFILES = {
 
 def is_bad_x_page(text):
     normalized = (text or "").lower()
-    bad_terms = [
-        "something went wrong. try reloading.",
-        "search filters",
-        "advanced search",
-    ]
-    tweet_like_terms = [
-        "@",
-        " repost",
-        " reposts",
-        " reply",
-        " replies",
-        " like",
-        " likes",
-        " views",
-        "·",
-    ]
 
-    return (
-        any(term in normalized for term in bad_terms)
-        and not any(term in normalized for term in tweet_like_terms)
-    )
+    if "something went wrong" in normalized:
+        return True
+
+    if "search timeline" not in normalized:
+        return True
+
+    return False
 
 
 def is_allowed(update):
