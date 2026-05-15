@@ -16,6 +16,9 @@ POSITION_TTL_SECONDS = 300
 balance = STARTING_BALANCE
 positions = []
 last_update_price = None
+total_trades = 0
+win_trades = 0
+total_pnl = 0.0
 
 
 def _valid_price(price):
@@ -68,9 +71,15 @@ def _save_state():
 def reset_paper_portfolio():
     global balance
     global positions
+    global total_trades
+    global win_trades
+    global total_pnl
 
     balance = STARTING_BALANCE
     positions = []
+    total_trades = 0
+    win_trades = 0
+    total_pnl = 0.0
     _save_state()
 
     return {
@@ -118,6 +127,9 @@ def execute_virtual_trade(decision, price, symbol):
 def update_positions(current_price, symbol):
     global balance
     global last_update_price
+    global total_trades
+    global win_trades
+    global total_pnl
 
     _load_state()
 
@@ -176,7 +188,18 @@ def update_positions(current_price, symbol):
         if pnl_pct >= 0.01 or pnl_pct <= -0.01 or age_seconds > POSITION_TTL_SECONDS:
             pnl = position_size * pnl_pct
             balance = max(0.0, balance + pnl)
+            total_trades += 1
+            total_pnl += pnl
+            if pnl > 0:
+                win_trades += 1
+            win_rate = (win_trades / total_trades) * 100 if total_trades else 0
             logger.info(f"[trade closed] pnl: {pnl:.2f} balance: {balance:.2f}")
+            logger.info(
+                f"[stats] trades: {total_trades} "
+                f"win_rate: {win_rate:.2f} "
+                f"total_pnl: {total_pnl:.2f} "
+                f"balance: {balance:.2f}"
+            )
         else:
             open_positions.append(position)
 
