@@ -88,7 +88,7 @@ def reset_paper_portfolio():
     }
 
 
-def execute_virtual_trade(decision, price, symbol):
+def execute_virtual_trade(decision, price, symbol, metadata=None):
     global balance
 
     _load_state()
@@ -115,6 +115,7 @@ def execute_virtual_trade(decision, price, symbol):
         "type": action,
         "size": size,
         "symbol": symbol,
+        "metadata": metadata or {},
         "timestamp": datetime.utcnow().isoformat(),
     }
 
@@ -188,12 +189,21 @@ def update_positions(current_price, symbol):
         if pnl_pct >= 0.01 or pnl_pct <= -0.01 or age_seconds > POSITION_TTL_SECONDS:
             pnl = position_size * pnl_pct
             balance = max(0.0, balance + pnl)
+            metadata = position.get("metadata", {})
             total_trades += 1
             total_pnl += pnl
             if pnl > 0:
                 win_trades += 1
             win_rate = (win_trades / total_trades) * 100 if total_trades else 0
             logger.info(f"[trade closed] pnl: {pnl:.2f} balance: {balance:.2f}")
+            logger.info(
+                f"[trade attribution] action: {metadata.get('action')} "
+                f"confidence: {metadata.get('confidence')} "
+                f"alpha: {metadata.get('alpha_score')} "
+                f"signal: {metadata.get('signal_score')} "
+                f"narrative: {metadata.get('narrative')} "
+                f"pnl: {pnl:.2f}"
+            )
             logger.info(
                 f"[stats] trades: {total_trades} "
                 f"win_rate: {win_rate:.2f} "

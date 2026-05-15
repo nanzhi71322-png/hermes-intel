@@ -219,7 +219,18 @@ content:
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
-                    opened_position = execute_virtual_trade(decision, market_price, keyword)
+                    opened_position = execute_virtual_trade(
+                        decision,
+                        market_price,
+                        keyword,
+                        metadata={
+                            "confidence": decision["confidence"],
+                            "alpha_score": alpha["alpha_score"],
+                            "signal_score": signal["score"],
+                            "narrative": narrative["narrative"],
+                            "action": decision["action"],
+                        },
+                    )
                     if opened_position:
                         logger.info(
                             f"[trade opened] action: {decision['action']} "
@@ -360,7 +371,18 @@ content:
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
                 if decision["confidence"] > 75:
-                    opened_position = execute_virtual_trade(decision, market_price, name)
+                    opened_position = execute_virtual_trade(
+                        decision,
+                        market_price,
+                        name,
+                        metadata={
+                            "confidence": decision["confidence"],
+                            "alpha_score": alpha["alpha_score"],
+                            "signal_score": signal["score"],
+                            "narrative": narrative["narrative"],
+                            "action": decision["action"],
+                        },
+                    )
                     if opened_position:
                         logger.info(
                             f"[trade opened] action: {decision['action']} "
