@@ -173,7 +173,7 @@ def update_positions(current_price, symbol):
             open_positions.append(position)
             continue
 
-        if pnl_pct >= 0.03 or pnl_pct <= -0.02 or age_seconds > POSITION_TTL_SECONDS:
+        if pnl_pct >= 0.01 or pnl_pct <= -0.01 or age_seconds > POSITION_TTL_SECONDS:
             pnl = position_size * pnl_pct
             balance = max(0.0, balance + pnl)
             logger.info(f"[trade closed] pnl: {pnl:.2f} balance: {balance:.2f}")
