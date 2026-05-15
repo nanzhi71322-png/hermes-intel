@@ -3,7 +3,7 @@ import time
 from loguru import logger
 
 
-TRADE_COOLDOWN_SECONDS = 20
+TRADE_COOLDOWN_SECONDS = 10
 MOMENTUM_NOISE_THRESHOLD = 0.0003
 last_trade_by_symbol = {}
 last_price_by_symbol = {}
@@ -92,9 +92,10 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
 
     bearish = _contains_any(text, bearish_terms)
     bullish = _contains_any(text, bullish_terms)
+    strong_momentum = momentum is not None and abs(momentum) > 50
     trade_allowed = (
-        alpha_score >= 65
-        and signal_score >= 65
+        (alpha_score >= 60 and signal_score >= 55)
+        or (strong_momentum and alpha_score >= 60 and signal_score >= 45)
     )
 
     if _cooldown_active(symbol):
