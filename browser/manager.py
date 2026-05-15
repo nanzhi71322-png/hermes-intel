@@ -149,18 +149,19 @@ async def browser_open(target):
         if len(body_text) > 1200:
             body_text = body_text[:1200]
 
-        return f"""browser opened
-
-title: {title}
-url: {current_url}
-
-preview:
-{body_text}
-"""
+        return {
+            "title": title,
+            "url": current_url,
+            "preview": body_text,
+        }
 
     except Exception as e:
         logger.exception("browser error")
-        return f"browser error: {str(e)}"
+        return {
+            "title": "",
+            "url": "",
+            "preview": f"browser error: {str(e)}",
+        }
 
 
 async def browser_screenshot(target):

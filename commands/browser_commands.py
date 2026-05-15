@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+
+from loguru import logger
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -6,6 +9,28 @@ from browser.manager import browser_open, browser_screenshot, init_browser
 from config.clients import llm_client as client
 from config.settings import DEEPSEEK_MODEL
 from utils.urls import build_x_search_url
+
+
+@asynccontextmanager
+async def browser_command_lock(command, keyword=None):
+    async with browser_manager.browser_lock:
+        detail = f" keyword: {keyword}" if keyword is not None else ""
+        logger.info(f"[browser lock] acquired command: {command}{detail}")
+        try:
+            yield
+        finally:
+            logger.info(f"[browser lock] released command: {command}{detail}")
+
+
+def format_browser_snapshot(snapshot):
+    return f"""browser opened
+
+title: {snapshot.get("title", "")}
+url: {snapshot.get("url", "")}
+
+preview:
+{snapshot.get("preview", "")}
+"""
 
 
 async def open_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -17,9 +42,10 @@ async def open_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"opening: {target}")
 
-    result = await browser_open(target)
+    async with browser_command_lock("open", target):
+        result = await browser_open(target)
 
-    await update.message.reply_text(result[:4000])
+    await update.message.reply_text(format_browser_snapshot(result)[:4000])
 
 
 async def screenshot_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -31,7 +57,8 @@ async def screenshot_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"screenshot: {target}")
 
-    path, title, current_url = await browser_screenshot(target)
+    async with browser_command_lock("screenshot", target):
+        path, title, current_url = await browser_screenshot(target)
 
     if not path:
         await update.message.reply_text(current_url)
@@ -51,10 +78,10 @@ async def click_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target = " ".join(context.args)
 
-    await init_browser()
-
     try:
-        await browser_manager.browser_page.get_by_text(target, exact=False).click(timeout=10000)
+        async with browser_command_lock("click", target):
+            await init_browser()
+            await browser_manager.browser_page.get_by_text(target, exact=False).click(timeout=10000)
         await update.message.reply_text(f"clicked: {target}")
     except Exception as e:
         await update.message.reply_text(f"click error: {str(e)}")
@@ -68,10 +95,10 @@ async def type_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     selector = context.args[0]
     text = " ".join(context.args[1:])
 
-    await init_browser()
-
     try:
-        await browser_manager.browser_page.locator(selector).fill(text, timeout=10000)
+        async with browser_command_lock("type", selector):
+            await init_browser()
+            await browser_manager.browser_page.locator(selector).fill(text, timeout=10000)
         await update.message.reply_text(f"typed into: {selector}")
     except Exception as e:
         await update.message.reply_text(f"type error: {str(e)}")
@@ -84,10 +111,10 @@ async def press_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     key = " ".join(context.args)
 
-    await init_browser()
-
     try:
-        await browser_manager.browser_page.keyboard.press(key)
+        async with browser_command_lock("press", key):
+            await init_browser()
+            await browser_manager.browser_page.keyboard.press(key)
         await update.message.reply_text(f"pressed: {key}")
     except Exception as e:
         await update.message.reply_text(f"press error: {str(e)}")
@@ -100,10 +127,10 @@ async def typeactive_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = " ".join(context.args)
 
-    await init_browser()
-
     try:
-        await browser_manager.browser_page.keyboard.type(text, delay=30)
+        async with browser_command_lock("typeactive"):
+            await init_browser()
+            await browser_manager.browser_page.keyboard.type(text, delay=30)
         await update.message.reply_text(f"typed active: {text}")
     except Exception as e:
         await update.message.reply_text(f"typeactive error: {str(e)}")
@@ -119,22 +146,23 @@ async def search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"searching x: {keyword}")
 
-    result = await browser_open(url)
+    async with browser_command_lock("search", keyword):
+        result = await browser_open(url)
 
-    await update.message.reply_text(result[:4000])
+    await update.message.reply_text(format_browser_snapshot(result)[:4000])
 
 
 async def read_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await init_browser()
-
     try:
-        title = await browser_manager.browser_page.title()
-        url = browser_manager.browser_page.url
+        async with browser_command_lock("read"):
+            await init_browser()
+            title = await browser_manager.browser_page.title()
+            url = browser_manager.browser_page.url
 
-        try:
-            text = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
-        except Exception:
-            text = ""
+            try:
+                text = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
+            except Exception:
+                text = ""
 
         if len(text) > 3500:
             text = text[:3500]
@@ -154,16 +182,16 @@ async def askpage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("usage: /askpage question")
         return
 
-    await init_browser()
-
     try:
-        title = await browser_manager.browser_page.title()
-        url = browser_manager.browser_page.url
+        async with browser_command_lock("askpage"):
+            await init_browser()
+            title = await browser_manager.browser_page.title()
+            url = browser_manager.browser_page.url
 
-        try:
-            body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
-        except Exception:
-            body = ""
+            try:
+                body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
+            except Exception:
+                body = ""
 
         if len(body) > 12000:
             body = body[:12000]
@@ -211,8 +239,6 @@ user request:
 
 
 async def scroll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await init_browser()
-
     amount = 900
     if context.args:
         try:
@@ -221,24 +247,26 @@ async def scroll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount = 900
 
     try:
-        await browser_manager.browser_page.mouse.wheel(0, amount)
-        await browser_manager.browser_page.wait_for_timeout(1500)
+        async with browser_command_lock("scroll", amount):
+            await init_browser()
+            await browser_manager.browser_page.mouse.wheel(0, amount)
+            await browser_manager.browser_page.wait_for_timeout(1500)
         await update.message.reply_text(f"scrolled: {amount}")
     except Exception as e:
         await update.message.reply_text(f"scroll error: {str(e)}")
 
 
 async def extractlinks_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await init_browser()
-
     try:
-        links = await browser_manager.browser_page.locator("a").evaluate_all("""
-            els => els.slice(0, 30).map((a, i) => ({
-                i,
-                text: (a.innerText || a.textContent || '').trim().slice(0, 80),
-                href: a.href
-            }))
-        """)
+        async with browser_command_lock("extractlinks"):
+            await init_browser()
+            links = await browser_manager.browser_page.locator("a").evaluate_all("""
+                els => els.slice(0, 30).map((a, i) => ({
+                    i,
+                    text: (a.innerText || a.textContent || '').trim().slice(0, 80),
+                    href: a.href
+                }))
+            """)
 
         lines = []
         for item in links:
@@ -257,8 +285,6 @@ async def extractlinks_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def clickindex_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await init_browser()
-
     if not context.args:
         await update.message.reply_text("usage: /clickindex 0")
         return
@@ -269,19 +295,27 @@ async def clickindex_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("index must be number")
         return
 
-    try:
-        links = browser_manager.browser_page.locator("a")
-        count = await links.count()
+    title = None
+    url = None
 
-        if index < 0 or index >= count:
+    try:
+        async with browser_command_lock("clickindex", index):
+            await init_browser()
+            links = browser_manager.browser_page.locator("a")
+            count = await links.count()
+
+            if index < 0 or index >= count:
+                pass
+            else:
+                await links.nth(index).click(timeout=10000)
+                await browser_manager.browser_page.wait_for_timeout(3000)
+
+                title = await browser_manager.browser_page.title()
+                url = browser_manager.browser_page.url
+
+        if title is None:
             await update.message.reply_text(f"index out of range. total links: {count}")
             return
-
-        await links.nth(index).click(timeout=10000)
-        await browser_manager.browser_page.wait_for_timeout(3000)
-
-        title = await browser_manager.browser_page.title()
-        url = browser_manager.browser_page.url
 
         await update.message.reply_text(f"clicked index: {index}\n\ntitle: {title}\nurl: {url}")
 
@@ -301,14 +335,15 @@ async def intel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         url = build_x_search_url(keyword)
 
-        await browser_open(url)
-        await browser_manager.browser_page.wait_for_timeout(3000)
+        async with browser_command_lock("intel", keyword):
+            await browser_open(url)
+            await browser_manager.browser_page.wait_for_timeout(3000)
 
-        for _ in range(3):
-            await browser_manager.browser_page.mouse.wheel(0, 1200)
-            await browser_manager.browser_page.wait_for_timeout(1500)
+            for _ in range(3):
+                await browser_manager.browser_page.mouse.wheel(0, 1200)
+                await browser_manager.browser_page.wait_for_timeout(1500)
 
-        body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
+            body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
 
         if len(body) > 16000:
             body = body[:16000]

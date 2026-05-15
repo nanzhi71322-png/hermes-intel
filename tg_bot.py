@@ -150,15 +150,16 @@ async def autonomous_loop(chat_id, keyword):
         try:
             url = build_x_search_url(keyword)
 
-            await browser_open(url)
+            async with browser_manager.browser_lock:
+                await browser_open(url)
 
-            await browser_manager.browser_page.wait_for_timeout(3000)
+                await browser_manager.browser_page.wait_for_timeout(3000)
 
-            await browser_manager.browser_page.mouse.wheel(0, 1200)
+                await browser_manager.browser_page.mouse.wheel(0, 1200)
 
-            await browser_manager.browser_page.wait_for_timeout(2000)
+                await browser_manager.browser_page.wait_for_timeout(2000)
 
-            body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
+                body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
 
             body = filter_new_signals(keyword, body)
 
