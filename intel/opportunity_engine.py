@@ -70,6 +70,15 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
     whale_detected = whale.get("whale", False)
     momentum = _price_momentum(symbol, current_price)
 
+    if narrative_name == "scam":
+        return {
+            "action": "watch",
+            "confidence": 50,
+            "reason": "scam narrative disabled due to poor performance",
+            "risk": "low signal quality",
+            "timeframe": "short",
+        }
+
     bearish_terms = [
         "liquidation",
         "bearish",
