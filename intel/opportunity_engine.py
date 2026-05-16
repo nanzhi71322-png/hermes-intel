@@ -186,6 +186,42 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
                 "timeframe": "short",
             }
 
+        normalized_text = (text or "").lower()
+        if confidence >= 80:
+            if (
+                "outflow" in normalized_text
+                or "liquidation" in normalized_text
+                or "hack" in normalized_text
+            ):
+                return {
+                    "action": "short",
+                    "confidence": confidence,
+                    "reason": "high confidence signal inferred bearish direction from risk terms",
+                    "risk": "short squeeze or fast reversal against bearish signal",
+                    "timeframe": "short",
+                }
+
+            if (
+                "inflow" in normalized_text
+                or "etf" in normalized_text
+                or "buy" in normalized_text
+            ):
+                return {
+                    "action": "long",
+                    "confidence": confidence,
+                    "reason": "high confidence signal inferred bullish direction from demand terms",
+                    "risk": "momentum may fade or bullish signal may be crowded",
+                    "timeframe": "short",
+                }
+
+            return {
+                "action": "long",
+                "confidence": confidence,
+                "reason": "high confidence signal defaulted to conservative long bias",
+                "risk": "unclear direction despite high confidence signal",
+                "timeframe": "short",
+            }
+
         return {
             "action": "watch",
             "confidence": confidence,
