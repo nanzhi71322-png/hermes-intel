@@ -235,14 +235,23 @@ async def autonomous_loop(chat_id, keyword):
                 timeout=45,
             )
 
+            logger.info(f"[signal pipeline] raw body: {keyword} len={len(body)}")
+            logger.info(f"[signal pipeline] quality check: {keyword}")
             if is_bad_x_page(body):
                 logger.info("[x quality] bad page, skip analysis")
                 await asyncio.sleep(300)
                 continue
 
-            body = filter_new_signals(keyword, body)
+            logger.info(f"[signal pipeline] quality ok: {keyword}")
+            logger.info(f"[signal pipeline] filtering: {keyword}")
+            body = await asyncio.wait_for(
+                asyncio.to_thread(filter_new_signals, keyword, body),
+                timeout=20,
+            )
+            logger.info(f"[signal pipeline] filtered: {keyword} len={len(body)}")
 
             if not body:
+                logger.info(f"[signal pipeline] no new signals: {keyword}")
                 await asyncio.sleep(300)
                 continue
 
@@ -425,14 +434,23 @@ async def agent_loop(chat_id, name):
                 timeout=45,
             )
 
+            logger.info(f"[signal pipeline] raw body: {name} len={len(body)}")
+            logger.info(f"[signal pipeline] quality check: {name}")
             if is_bad_x_page(body):
                 logger.info("[x quality] bad page, skip analysis")
                 await asyncio.sleep(300)
                 continue
 
-            body = filter_new_signals(f"agent:{name}", body)
+            logger.info(f"[signal pipeline] quality ok: {name}")
+            logger.info(f"[signal pipeline] filtering: {name}")
+            body = await asyncio.wait_for(
+                asyncio.to_thread(filter_new_signals, f"agent:{name}", body),
+                timeout=20,
+            )
+            logger.info(f"[signal pipeline] filtered: {name} len={len(body)}")
 
             if not body:
+                logger.info(f"[signal pipeline] no new signals: {name}")
                 await asyncio.sleep(300)
                 continue
 
