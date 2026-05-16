@@ -9,4 +9,4 @@ def normalize_browser_target(target):
 
 
 def build_x_search_url(keyword):
-    return "https://x.com/search?q=" + keyword.replace(" ", "%20") + "&src=typed_query"
+    return "https://nitter.net/search?q=" + keyword.replace(" ", "%20")
