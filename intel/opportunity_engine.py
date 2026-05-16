@@ -152,6 +152,48 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
             "timeframe": "short",
         }
 
+    if trade_allowed:
+        confidence = _adjust_confidence_for_momentum(
+            max(0, min(100, alpha_score)),
+            momentum,
+            current_price,
+        )
+
+        if bullish and bearish:
+            return {
+                "action": "watch",
+                "confidence": confidence,
+                "reason": "mixed bullish and bearish directional signals",
+                "risk": "conflicting market signals can reverse quickly",
+                "timeframe": "short",
+            }
+
+        if bullish and confidence >= 70:
+            return {
+                "action": "long",
+                "confidence": confidence,
+                "reason": "trade allowed with clean bullish directional signal",
+                "risk": "momentum may fade or bullish signal may be crowded",
+                "timeframe": "short",
+            }
+
+        if bearish and confidence >= 70:
+            return {
+                "action": "short",
+                "confidence": confidence,
+                "reason": "trade allowed with clean bearish directional signal",
+                "risk": "short squeeze or fast reversal against bearish signal",
+                "timeframe": "short",
+            }
+
+        return {
+            "action": "watch",
+            "confidence": confidence,
+            "reason": "trade allowed but no clean directional signal above confidence threshold",
+            "risk": "unclear direction despite sufficient signal quality",
+            "timeframe": "short",
+        }
+
     if (
         trade_allowed
         and whale_detected
