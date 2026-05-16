@@ -359,6 +359,15 @@ content:
                 f"risk: {decision['risk']}"
             )
 
+            logger.info("[tg debug] sending analysis preview")
+            debug_prefix = ""
+            if decision["confidence"] < 70:
+                debug_prefix = "[DEBUG LOW SIGNAL]\n"
+            await app.bot.send_message(
+                chat_id=chat_id,
+                text=f"{debug_prefix}{answer[:800]}"
+            )
+
             if signal["level"] not in ("high", "critical") and signal["score"] < 70:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
                 continue
@@ -527,6 +536,15 @@ content:
                 f"timeframe: {decision['timeframe']}]\n"
                 f"reason: {decision['reason']}\n"
                 f"risk: {decision['risk']}"
+            )
+
+            logger.info("[tg debug] sending analysis preview")
+            debug_prefix = ""
+            if decision["confidence"] < 70:
+                debug_prefix = "[DEBUG LOW SIGNAL]\n"
+            await app.bot.send_message(
+                chat_id=chat_id,
+                text=f"{debug_prefix}{answer[:800]}"
             )
 
             if signal["level"] not in ("high", "critical") and signal["score"] < 70:
