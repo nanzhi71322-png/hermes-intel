@@ -264,23 +264,37 @@ content:
 {body}
 """
 
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
-                model=DEEPSEEK_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "you are a crypto intelligence analyst"
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.2
-            )
+            logger.info(f"[llm] starting analysis: {keyword}")
+            try:
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.chat.completions.create,
+                        model=DEEPSEEK_MODEL,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "you are a crypto intelligence analyst"
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        temperature=0.2
+                    ),
+                    timeout=90,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"[llm timeout] analysis timed out: {keyword}")
+                await asyncio.sleep(300)
+                continue
+            except Exception as e:
+                logger.error(f"[llm error] {keyword}: {e}")
+                await asyncio.sleep(300)
+                continue
 
             answer = response.choices[0].message.content
+            logger.info(f"[llm] analysis received: {keyword} len={len(answer)}")
 
             if len(answer) > 4000:
                 answer = answer[:4000]
@@ -447,23 +461,37 @@ content:
 {body}
 """
 
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
-                model=DEEPSEEK_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "you are a senior crypto intelligence analyst. be concise, factual, and high-signal."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.2
-            )
+            logger.info(f"[llm] starting analysis: {name}")
+            try:
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.chat.completions.create,
+                        model=DEEPSEEK_MODEL,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "you are a senior crypto intelligence analyst. be concise, factual, and high-signal."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        temperature=0.2
+                    ),
+                    timeout=90,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"[llm timeout] analysis timed out: {name}")
+                await asyncio.sleep(300)
+                continue
+            except Exception as e:
+                logger.error(f"[llm error] {name}: {e}")
+                await asyncio.sleep(300)
+                continue
 
             answer = response.choices[0].message.content
+            logger.info(f"[llm] analysis received: {name} len={len(answer)}")
 
             if len(answer) > 4000:
                 answer = answer[:4000]
