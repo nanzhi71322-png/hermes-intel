@@ -132,7 +132,7 @@ def save_autonomous_tasks():
         logger.error(f"save task error: {e}")
 
 
-async def restore_autonomous_tasks():
+async def restore_autonomous_tasks(application):
     global autonomous_tasks
 
     try:
@@ -154,18 +154,19 @@ async def restore_autonomous_tasks():
 
             if keyword.startswith("agent:"):
                 name = keyword.split(":", 1)[1]
-                task = asyncio.create_task(
+                task = application.create_task(
                     agent_loop(chat_id, name)
                 )
                 key = f"{chat_id}:agent:{name}"
             else:
-                task = asyncio.create_task(
+                task = application.create_task(
                     autonomous_loop(chat_id, keyword)
                 )
                 key = f"{chat_id}:{keyword}"
 
             autonomous_tasks[key] = task
 
+            logger.info(f"[restore] scheduled autonomous: {key}")
             logger.info(f"restored autonomous: {key}")
 
         except Exception as e:
@@ -320,6 +321,8 @@ content:
 
 
 async def agent_loop(chat_id, name):
+    logger.info(f"[agent loop started] {name}")
+
     profile = AGENT_PROFILES[name]
     keyword = profile["keyword"]
 
@@ -485,9 +488,13 @@ content:
         await asyncio.sleep(300)
 
 
+async def on_startup(application):
+    await restore_autonomous_tasks(application)
+
+
 def main():
     global app
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(on_startup).build()
     app.add_handler(TypeHandler(Update, access_control), group=-1)
 
     register_handlers(
@@ -498,8 +505,6 @@ def main():
         save_autonomous_tasks,
         AGENT_PROFILES,
     )
-
-    asyncio.get_event_loop().create_task(restore_autonomous_tasks())
 
     logger.info("hermes telegram bot started")
 
