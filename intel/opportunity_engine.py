@@ -136,7 +136,7 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
 
     bearish = _contains_any(text, bearish_terms)
     bullish = _contains_any(text, bullish_terms)
-    has_trade_catalyst = whale_detected or narrative_name in ("etf", "regulation", "macro")
+    has_trade_catalyst = whale_detected or narrative_name in ("etf", "regulation", "macro", "breaking", "news")
     trade_allowed = (
         alpha_score >= 75
         and signal_score >= 64
