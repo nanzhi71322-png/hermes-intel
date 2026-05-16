@@ -139,7 +139,7 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
     has_trade_catalyst = whale_detected or narrative_name in ("etf", "regulation", "macro")
     trade_allowed = (
         alpha_score >= 75
-        and signal_score >= 70
+        and signal_score >= 64
         and has_trade_catalyst
     )
 
