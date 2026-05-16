@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 
 from datetime import datetime
 
@@ -38,6 +39,10 @@ ensure_runtime_dirs()
 setup_logging()
 
 autonomous_tasks = {}
+DEBUG_BYPASS_SIGNAL_FILTER = os.getenv(
+    "DEBUG_BYPASS_SIGNAL_FILTER",
+    "false"
+).lower() == "true"
 
 AGENT_PROFILES = {
     "btc": {
@@ -242,6 +247,7 @@ async def autonomous_loop(chat_id, keyword):
                 await asyncio.sleep(300)
                 continue
 
+            raw_body = body
             logger.info(f"[signal pipeline] quality ok: {keyword}")
             logger.info(f"[signal pipeline] filtering: {keyword}")
             body = await asyncio.wait_for(
@@ -249,6 +255,15 @@ async def autonomous_loop(chat_id, keyword):
                 timeout=20,
             )
             logger.info(f"[signal pipeline] filtered: {keyword} len={len(body)}")
+
+            if not body:
+                if DEBUG_BYPASS_SIGNAL_FILTER:
+                    logger.info(f"[signal pipeline] debug bypass dedupe: {keyword}")
+                    body = raw_body[:12000]
+                else:
+                    logger.info(f"[signal pipeline] no new signals: {keyword}")
+                    await asyncio.sleep(300)
+                    continue
 
             if not body:
                 logger.info(f"[signal pipeline] no new signals: {keyword}")
@@ -441,6 +456,7 @@ async def agent_loop(chat_id, name):
                 await asyncio.sleep(300)
                 continue
 
+            raw_body = body
             logger.info(f"[signal pipeline] quality ok: {name}")
             logger.info(f"[signal pipeline] filtering: {name}")
             body = await asyncio.wait_for(
@@ -448,6 +464,15 @@ async def agent_loop(chat_id, name):
                 timeout=20,
             )
             logger.info(f"[signal pipeline] filtered: {name} len={len(body)}")
+
+            if not body:
+                if DEBUG_BYPASS_SIGNAL_FILTER:
+                    logger.info(f"[signal pipeline] debug bypass dedupe: {name}")
+                    body = raw_body[:12000]
+                else:
+                    logger.info(f"[signal pipeline] no new signals: {name}")
+                    await asyncio.sleep(300)
+                    continue
 
             if not body:
                 logger.info(f"[signal pipeline] no new signals: {name}")
