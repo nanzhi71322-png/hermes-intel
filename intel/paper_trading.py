@@ -88,7 +88,7 @@ def reset_paper_portfolio():
     }
 
 
-def execute_virtual_trade(decision, price, symbol, metadata=None):
+def execute_virtual_trade(decision, price, symbol, metadata=None, size_override=None):
     global balance
 
     _load_state()
@@ -105,7 +105,13 @@ def execute_virtual_trade(decision, price, symbol, metadata=None):
         return None
 
     entry_price = float(price)
-    size = min(balance * 0.10, balance)
+    if size_override is not None:
+        try:
+            size = min(float(size_override), balance)
+        except (TypeError, ValueError):
+            return None
+    else:
+        size = min(balance * 0.10, balance)
 
     if size <= 0:
         return None

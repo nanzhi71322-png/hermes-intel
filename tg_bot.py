@@ -271,11 +271,22 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
+                trade_size = None
                 if decision["confidence"] >= 80:
+                    trade_size = 10
+                elif decision["confidence"] >= 70:
+                    trade_size = 3
+
+                if trade_size is not None:
+                    logger.info(
+                        f"[trade sizing] confidence: {decision['confidence']} "
+                        f"size: {trade_size}"
+                    )
                     opened_position = execute_virtual_trade(
                         decision,
                         market_price,
                         keyword,
+                        size_override=trade_size,
                         metadata={
                             "confidence": decision["confidence"],
                             "alpha_score": alpha["alpha_score"],
@@ -431,11 +442,22 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
+                trade_size = None
                 if decision["confidence"] >= 80:
+                    trade_size = 10
+                elif decision["confidence"] >= 70:
+                    trade_size = 3
+
+                if trade_size is not None:
+                    logger.info(
+                        f"[trade sizing] confidence: {decision['confidence']} "
+                        f"size: {trade_size}"
+                    )
                     opened_position = execute_virtual_trade(
                         decision,
                         market_price,
                         name,
+                        size_override=trade_size,
                         metadata={
                             "confidence": decision["confidence"],
                             "alpha_score": alpha["alpha_score"],
