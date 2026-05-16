@@ -410,7 +410,11 @@ content:
                 f"risk: {decision['risk']}"
             )
 
-            if signal["level"] not in ("high", "critical") and signal["score"] < 70:
+            logger.info(
+                f"[decision debug] score={signal['score']} "
+                f"confidence={decision['confidence']} action={decision['action']}"
+            )
+            if signal["score"] < 65:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
                 continue
 
@@ -626,7 +630,11 @@ content:
                 f"risk: {decision['risk']}"
             )
 
-            if signal["level"] not in ("high", "critical") and signal["score"] < 70:
+            logger.info(
+                f"[decision debug] score={signal['score']} "
+                f"confidence={decision['confidence']} action={decision['action']}"
+            )
+            if signal["score"] < 65:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
                 continue
 
