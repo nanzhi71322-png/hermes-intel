@@ -51,13 +51,10 @@ def is_bad_x_page(text):
     if "search timeline" in normalized:
         return False
 
-    nitter_markers = [
-        "@",
-        "replying to",
-        "minimum likes",
-        "filter",
-    ]
-    if "tweets" in normalized and any(marker in normalized for marker in nitter_markers):
+    if "nitter" in normalized and "@" in normalized:
+        return False
+
+    if "replying to" in normalized and "@" in normalized:
         return False
 
     return True
