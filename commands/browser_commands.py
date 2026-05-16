@@ -36,13 +36,31 @@ preview:
 def is_bad_x_page(text):
     normalized = (text or "").lower()
 
+    if not normalized.strip():
+        return True
+
     if "something went wrong" in normalized:
         return True
 
-    if "search timeline" not in normalized:
+    if "sign in to x" in normalized:
         return True
 
-    return False
+    if "rate limited" in normalized:
+        return True
+
+    if "search timeline" in normalized:
+        return False
+
+    nitter_markers = [
+        "@",
+        "replying to",
+        "minimum likes",
+        "filter",
+    ]
+    if "tweets" in normalized and any(marker in normalized for marker in nitter_markers):
+        return False
+
+    return True
 
 
 async def open_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
