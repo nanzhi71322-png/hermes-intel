@@ -510,13 +510,9 @@ content:
         await asyncio.sleep(300)
 
 
-async def on_startup(application):
-    await restore_autonomous_tasks(application)
-
-
-def main():
+async def run_bot():
     global app
-    app = ApplicationBuilder().token(BOT_TOKEN).post_init(on_startup).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(TypeHandler(Update, access_control), group=-1)
 
     register_handlers(
@@ -531,11 +527,39 @@ def main():
     logger.info("hermes telegram bot started")
 
     try:
-        app.run_polling()
+        await app.initialize()
+        await app.start()
+        await restore_autonomous_tasks(app)
+        await app.updater.start_polling()
+        await asyncio.Event().wait()
     except Conflict:
         logger.warning(
             "Another Telegram bot instance is already polling. Stop the other instance before running this one."
         )
+    finally:
+        try:
+            if app.updater and app.updater.running:
+                await app.updater.stop()
+        except Exception as e:
+            logger.warning(f"updater stop error: {e}")
+
+        try:
+            if app.running:
+                await app.stop()
+        except Exception as e:
+            logger.warning(f"application stop error: {e}")
+
+        try:
+            await app.shutdown()
+        except Exception as e:
+            logger.warning(f"application shutdown error: {e}")
+
+
+def main():
+    try:
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        logger.info("hermes telegram bot stopped")
 
 if __name__ == "__main__":
     main()
