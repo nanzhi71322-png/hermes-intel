@@ -173,21 +173,67 @@ async def restore_autonomous_tasks(application):
             logger.error(f"restore task error: {e}")
 
 
+async def reset_shared_browser():
+    async with browser_manager.browser_lock:
+        context = browser_manager.browser_context
+        browser_manager.browser_context = None
+        browser_manager.browser_page = None
+
+        if context:
+            try:
+                await context.close()
+            except Exception as e:
+                logger.warning(f"shared browser reset error: {e}")
+
+
+async def read_autonomous_browser_body(keyword, url):
+    logger.info(f"[agent browser] opening: {keyword}")
+
+    async with browser_manager.browser_lock:
+        await browser_open(url)
+
+        await browser_manager.browser_page.wait_for_timeout(3000)
+
+        await browser_manager.browser_page.mouse.wheel(0, 1200)
+
+        await browser_manager.browser_page.wait_for_timeout(2000)
+
+        body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
+
+    logger.info(f"[agent browser] body read: {keyword} len={len(body)}")
+
+    return body
+
+
+async def read_agent_browser_body(name, url):
+    logger.info(f"[agent browser] opening: {name}")
+
+    async with browser_manager.browser_lock:
+        await init_browser()
+
+        await browser_manager.browser_page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        await browser_manager.browser_page.wait_for_timeout(3000)
+
+        for _ in range(3):
+            await browser_manager.browser_page.mouse.wheel(0, 1200)
+            await browser_manager.browser_page.wait_for_timeout(1500)
+
+        body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
+
+    logger.info(f"[agent browser] body read: {name} len={len(body)}")
+
+    return body
+
+
 async def autonomous_loop(chat_id, keyword):
     while True:
         try:
             url = build_x_search_url(keyword)
 
-            async with browser_manager.browser_lock:
-                await browser_open(url)
-
-                await browser_manager.browser_page.wait_for_timeout(3000)
-
-                await browser_manager.browser_page.mouse.wheel(0, 1200)
-
-                await browser_manager.browser_page.wait_for_timeout(2000)
-
-                body = await browser_manager.browser_page.locator("body").inner_text(timeout=8000)
+            body = await asyncio.wait_for(
+                read_autonomous_browser_body(keyword, url),
+                timeout=45,
+            )
 
             if is_bad_x_page(body):
                 logger.info("[x quality] bad page, skip analysis")
@@ -322,6 +368,12 @@ content:
                 text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[autonomous: {keyword}]\n\n{answer}"
             )
 
+        except asyncio.TimeoutError:
+            logger.warning(f"[agent timeout] browser step timed out: {keyword}")
+            await reset_shared_browser()
+            await asyncio.sleep(300)
+            continue
+
         except Exception as e:
             await app.bot.send_message(
                 chat_id=chat_id,
@@ -341,17 +393,10 @@ async def agent_loop(chat_id, name):
         try:
             url = build_x_search_url(keyword)
 
-            async with browser_manager.browser_lock:
-                await init_browser()
-
-                await browser_manager.browser_page.goto(url, timeout=60000, wait_until="domcontentloaded")
-                await browser_manager.browser_page.wait_for_timeout(3000)
-
-                for _ in range(3):
-                    await browser_manager.browser_page.mouse.wheel(0, 1200)
-                    await browser_manager.browser_page.wait_for_timeout(1500)
-
-                body = await browser_manager.browser_page.locator("body").inner_text(timeout=10000)
+            body = await asyncio.wait_for(
+                read_agent_browser_body(name, url),
+                timeout=45,
+            )
 
             if is_bad_x_page(body):
                 logger.info("[x quality] bad page, skip analysis")
@@ -492,6 +537,16 @@ content:
                 chat_id=chat_id,
                 text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[agent:{name}]\n\n{answer}"
             )
+
+        except asyncio.TimeoutError:
+            logger.warning(f"[agent timeout] browser step timed out: {name}")
+            try:
+                await reset_agent_browser(name)
+            except Exception as reset_error:
+                logger.warning(f"agent browser reset error {name}: {reset_error}")
+            await reset_shared_browser()
+            await asyncio.sleep(300)
+            continue
 
         except Exception as e:
             await app.bot.send_message(
