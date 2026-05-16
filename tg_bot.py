@@ -27,6 +27,7 @@ from config.settings import (
 )
 from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
 from intel.feedback_engine import evaluate_decisions, extract_price_from_text, record_decision
+from intel.market_confirmation import confirm_market_trade
 from intel.market_price import get_btc_price
 from intel.opportunity_engine import generate_decision, mark_trade_opened
 from intel.paper_trading import execute_virtual_trade, update_positions
@@ -43,6 +44,7 @@ DEBUG_BYPASS_SIGNAL_FILTER = os.getenv(
     "DEBUG_BYPASS_SIGNAL_FILTER",
     "false"
 ).lower() == "true"
+previous_market_prices = {}
 
 AGENT_PROFILES = {
     "btc": {
@@ -368,6 +370,8 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
+                previous_price = previous_market_prices.get(keyword)
+                previous_market_prices[keyword] = market_price
                 trade_size = None
                 if decision["confidence"] >= 80:
                     trade_size = 10
@@ -379,19 +383,33 @@ content:
                         f"[trade sizing] confidence: {decision['confidence']} "
                         f"size: {trade_size}"
                     )
-                    opened_position = execute_virtual_trade(
-                        decision,
+                    market_confirmation = confirm_market_trade(
+                        decision["action"],
                         market_price,
-                        keyword,
-                        size_override=trade_size,
-                        metadata={
-                            "confidence": decision["confidence"],
-                            "alpha_score": alpha["alpha_score"],
-                            "signal_score": signal["score"],
-                            "narrative": narrative["narrative"],
-                            "action": decision["action"],
-                        },
+                        previous_price,
                     )
+                    logger.info(
+                        f"[market confirm] action={decision['action']} "
+                        f"confirmed={market_confirmation['confirmed']} "
+                        f"score={market_confirmation['market_score']} "
+                        f"reason={market_confirmation['reason']}"
+                    )
+                    if market_confirmation["confirmed"]:
+                        opened_position = execute_virtual_trade(
+                            decision,
+                            market_price,
+                            keyword,
+                            size_override=trade_size,
+                            metadata={
+                                "confidence": decision["confidence"],
+                                "alpha_score": alpha["alpha_score"],
+                                "signal_score": signal["score"],
+                                "narrative": narrative["narrative"],
+                                "action": decision["action"],
+                            },
+                        )
+                    else:
+                        opened_position = None
                     if opened_position:
                         logger.info(
                             f"[trade opened] action: {decision['action']} "
@@ -588,6 +606,8 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
+                previous_price = previous_market_prices.get(name)
+                previous_market_prices[name] = market_price
                 trade_size = None
                 if decision["confidence"] >= 80:
                     trade_size = 10
@@ -599,19 +619,33 @@ content:
                         f"[trade sizing] confidence: {decision['confidence']} "
                         f"size: {trade_size}"
                     )
-                    opened_position = execute_virtual_trade(
-                        decision,
+                    market_confirmation = confirm_market_trade(
+                        decision["action"],
                         market_price,
-                        name,
-                        size_override=trade_size,
-                        metadata={
-                            "confidence": decision["confidence"],
-                            "alpha_score": alpha["alpha_score"],
-                            "signal_score": signal["score"],
-                            "narrative": narrative["narrative"],
-                            "action": decision["action"],
-                        },
+                        previous_price,
                     )
+                    logger.info(
+                        f"[market confirm] action={decision['action']} "
+                        f"confirmed={market_confirmation['confirmed']} "
+                        f"score={market_confirmation['market_score']} "
+                        f"reason={market_confirmation['reason']}"
+                    )
+                    if market_confirmation["confirmed"]:
+                        opened_position = execute_virtual_trade(
+                            decision,
+                            market_price,
+                            name,
+                            size_override=trade_size,
+                            metadata={
+                                "confidence": decision["confidence"],
+                                "alpha_score": alpha["alpha_score"],
+                                "signal_score": signal["score"],
+                                "narrative": narrative["narrative"],
+                                "action": decision["action"],
+                            },
+                        )
+                    else:
+                        opened_position = None
                     if opened_position:
                         logger.info(
                             f"[trade opened] action: {decision['action']} "
