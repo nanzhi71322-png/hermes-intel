@@ -100,6 +100,50 @@ def get_market_candidate_stats():
     return deepcopy(candidate_stats)
 
 
+def get_best_market_candidate_edge(min_count=8):
+    stats = get_market_candidate_stats()
+    best_edge = None
+
+    for horizon, horizon_stats in stats.items():
+        for action, action_stats in horizon_stats.items():
+            count = action_stats.get("count", 0)
+            avg_pnl_pct = action_stats.get("avg_pnl_pct", 0.0)
+            if count < min_count or avg_pnl_pct <= 0:
+                continue
+
+            win_rate = action_stats.get("win_rate", 0.0)
+            edge_score = win_rate * avg_pnl_pct
+            candidate_edge = {
+                "horizon": horizon,
+                "action": action,
+                "count": count,
+                "wins": action_stats.get("wins", 0),
+                "losses": action_stats.get("losses", 0),
+                "win_rate": win_rate,
+                "avg_pnl_pct": avg_pnl_pct,
+                "edge_score": edge_score,
+                "reason": "best reliable positive edge",
+            }
+
+            if best_edge is None or edge_score > best_edge["edge_score"]:
+                best_edge = candidate_edge
+
+    if best_edge:
+        return best_edge
+
+    return {
+        "horizon": None,
+        "action": None,
+        "count": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "avg_pnl_pct": 0.0,
+        "edge_score": 0.0,
+        "reason": "no reliable positive edge",
+    }
+
+
 def _build_event(candidate, current_price, horizon):
     entry_price = candidate["entry_price"]
     action = candidate["action"]

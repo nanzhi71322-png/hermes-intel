@@ -31,6 +31,7 @@ from intel.market_confirmation import confirm_market_trade
 from intel.market_core import confirm_market_core
 from intel.market_candidate_tracker import (
     evaluate_market_candidates,
+    get_best_market_candidate_edge,
     get_market_candidate_stats,
     record_market_candidate,
 )
@@ -514,6 +515,14 @@ content:
                         f"win_rate={event_stats.get('win_rate', 0):.4f} "
                         f"avg_pnl_pct={event_stats.get('avg_pnl_pct', 0):.6f}"
                     )
+                    edge = get_best_market_candidate_edge()
+                    logger.info(
+                        f"[market candidate edge] horizon={edge['horizon']} "
+                        f"action={edge['action']} count={edge['count']} "
+                        f"win_rate={edge['win_rate']:.4f} "
+                        f"avg_pnl_pct={edge['avg_pnl_pct']:.6f} "
+                        f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
+                    )
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (
@@ -837,6 +846,14 @@ content:
                         f"losses={event_stats.get('losses', 0)} "
                         f"win_rate={event_stats.get('win_rate', 0):.4f} "
                         f"avg_pnl_pct={event_stats.get('avg_pnl_pct', 0):.6f}"
+                    )
+                    edge = get_best_market_candidate_edge()
+                    logger.info(
+                        f"[market candidate edge] horizon={edge['horizon']} "
+                        f"action={edge['action']} count={edge['count']} "
+                        f"win_rate={edge['win_rate']:.4f} "
+                        f"avg_pnl_pct={edge['avg_pnl_pct']:.6f} "
+                        f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
                     )
             else:
                 logger.info("invalid price, skip trading")
