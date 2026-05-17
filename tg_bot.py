@@ -30,6 +30,7 @@ from intel.feedback_engine import evaluate_decisions, extract_price_from_text, r
 from intel.market_confirmation import confirm_market_trade
 from intel.market_core import confirm_market_core
 from intel.market_price import get_btc_price
+from intel.market_state import get_btc_market_state
 from intel.opportunity_engine import generate_decision, mark_trade_opened
 from intel.paper_trading import execute_virtual_trade, update_positions
 from intel.signal_engine import score_signal
@@ -342,7 +343,19 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
-            market_price = get_btc_price()
+            market_state = get_btc_market_state("BTCUSDT")
+            market_price = market_state.get("price")
+            if market_price is None:
+                market_price = get_btc_price()
+            logger.info(
+                f"[market state] bias={market_state.get('market_bias')} "
+                f"score={market_state.get('score')} "
+                f"imbalance={market_state.get('orderbook_imbalance')} "
+                f"volume_ratio={market_state.get('volume_ratio_1m')} "
+                f"bb={market_state.get('bb_position')} "
+                f"breakout={market_state.get('breakout')} "
+                f"reason={market_state.get('reason')}"
+            )
             decision = generate_decision(
                 signal,
                 alpha,
@@ -426,6 +439,12 @@ content:
                                     "signal_score": signal["score"],
                                     "narrative": narrative["narrative"],
                                     "action": decision["action"],
+                                    "market_bias": market_state.get("market_bias"),
+                                    "market_score": market_state.get("score"),
+                                    "orderbook_imbalance": market_state.get("orderbook_imbalance"),
+                                    "volume_ratio_1m": market_state.get("volume_ratio_1m"),
+                                    "bb_position": market_state.get("bb_position"),
+                                    "breakout": market_state.get("breakout"),
                                 },
                             )
                         else:
@@ -597,7 +616,19 @@ content:
                 f"whale: {'yes' if whale['whale'] else 'no'} | "
                 f"narrative: {narrative['narrative']}]"
             )
-            market_price = get_btc_price()
+            market_state = get_btc_market_state("BTCUSDT")
+            market_price = market_state.get("price")
+            if market_price is None:
+                market_price = get_btc_price()
+            logger.info(
+                f"[market state] bias={market_state.get('market_bias')} "
+                f"score={market_state.get('score')} "
+                f"imbalance={market_state.get('orderbook_imbalance')} "
+                f"volume_ratio={market_state.get('volume_ratio_1m')} "
+                f"bb={market_state.get('bb_position')} "
+                f"breakout={market_state.get('breakout')} "
+                f"reason={market_state.get('reason')}"
+            )
             decision = generate_decision(
                 signal,
                 alpha,
@@ -681,6 +712,12 @@ content:
                                     "signal_score": signal["score"],
                                     "narrative": narrative["narrative"],
                                     "action": decision["action"],
+                                    "market_bias": market_state.get("market_bias"),
+                                    "market_score": market_state.get("score"),
+                                    "orderbook_imbalance": market_state.get("orderbook_imbalance"),
+                                    "volume_ratio_1m": market_state.get("volume_ratio_1m"),
+                                    "bb_position": market_state.get("bb_position"),
+                                    "breakout": market_state.get("breakout"),
                                 },
                             )
                         else:
