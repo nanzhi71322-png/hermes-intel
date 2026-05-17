@@ -28,6 +28,7 @@ from config.settings import (
 from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
 from intel.feedback_engine import evaluate_decisions, extract_price_from_text, record_decision
 from intel.market_confirmation import confirm_market_trade
+from intel.market_core import confirm_market_core
 from intel.market_price import get_btc_price
 from intel.opportunity_engine import generate_decision, mark_trade_opened
 from intel.paper_trading import execute_virtual_trade, update_positions
@@ -401,6 +402,16 @@ content:
                         logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
                         opened_position = None
                     elif market_confirmation["confirmed"]:
+                        symbol = keyword
+                        price_snapshot = {
+                            "current_price": market_price,
+                            "previous_price": previous_market_prices.get(symbol)
+                        }
+                        core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                        logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
+                        if not core_confirm["confirmed"]:
+                            continue
+
                         opened_position = execute_virtual_trade(
                             decision,
                             market_price,
@@ -643,6 +654,16 @@ content:
                         logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
                         opened_position = None
                     elif market_confirmation["confirmed"]:
+                        symbol = name
+                        price_snapshot = {
+                            "current_price": market_price,
+                            "previous_price": previous_market_prices.get(symbol)
+                        }
+                        core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                        logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
+                        if not core_confirm["confirmed"]:
+                            continue
+
                         opened_position = execute_virtual_trade(
                             decision,
                             market_price,
