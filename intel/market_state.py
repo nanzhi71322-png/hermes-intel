@@ -22,6 +22,11 @@ def _unknown_state(symbol, reason):
         "market_bias": "unknown",
         "score": 20,
         "reason": reason,
+        "bullish_count": 0,
+        "bearish_count": 0,
+        "confirmation_count": 0,
+        "bullish_reasons": [],
+        "bearish_reasons": [],
     }
 
 
@@ -154,21 +159,28 @@ def get_btc_market_state(symbol="BTCUSDT"):
         bb_position = _bollinger_position(klines_1m)
         breakout = _breakout(klines_1m)
 
-        bullish_confirmations = [
-            orderbook_imbalance is not None and orderbook_imbalance > 0.08,
-            volume_ratio_1m is not None and volume_ratio_1m >= 1.5,
-            breakout == "up",
-            bb_position in ("upper", "outside_upper"),
-        ]
-        bearish_confirmations = [
-            orderbook_imbalance is not None and orderbook_imbalance < -0.08,
-            volume_ratio_1m is not None and volume_ratio_1m >= 1.5,
-            breakout == "down",
-            bb_position in ("lower", "outside_lower"),
-        ]
+        bullish_reasons = []
+        bearish_reasons = []
 
-        bullish_count = sum(1 for item in bullish_confirmations if item)
-        bearish_count = sum(1 for item in bearish_confirmations if item)
+        if orderbook_imbalance is not None and orderbook_imbalance > 0.08:
+            bullish_reasons.append("orderbook_bid_pressure")
+        if volume_ratio_1m is not None and volume_ratio_1m >= 1.5:
+            bullish_reasons.append("volume_expansion")
+            bearish_reasons.append("volume_expansion")
+        if breakout == "up":
+            bullish_reasons.append("breakout_up")
+        if bb_position in ("upper", "outside_upper"):
+            bullish_reasons.append("upper_band_position")
+
+        if orderbook_imbalance is not None and orderbook_imbalance < -0.08:
+            bearish_reasons.append("orderbook_ask_pressure")
+        if breakout == "down":
+            bearish_reasons.append("breakout_down")
+        if bb_position in ("lower", "outside_lower"):
+            bearish_reasons.append("lower_band_position")
+
+        bullish_count = len(bullish_reasons)
+        bearish_count = len(bearish_reasons)
 
         if bullish_count >= 2:
             market_bias = "bullish"
@@ -201,7 +213,17 @@ def get_btc_market_state(symbol="BTCUSDT"):
             market_bias = "unknown"
             score = 20
 
-        reason = f"{market_bias} confirmations={confirmation_count}"
+        if market_bias == "bullish":
+            active_reasons = bullish_reasons
+        elif market_bias == "bearish":
+            active_reasons = bearish_reasons
+        else:
+            active_reasons = bullish_reasons + bearish_reasons
+
+        reason = (
+            f"{market_bias} bullish_count={bullish_count} "
+            f"bearish_count={bearish_count} reasons={','.join(active_reasons)}"
+        )
 
         return {
             "symbol": symbol,
@@ -217,6 +239,11 @@ def get_btc_market_state(symbol="BTCUSDT"):
             "market_bias": market_bias,
             "score": score,
             "reason": reason,
+            "bullish_count": bullish_count,
+            "bearish_count": bearish_count,
+            "confirmation_count": confirmation_count,
+            "bullish_reasons": bullish_reasons,
+            "bearish_reasons": bearish_reasons,
         }
     except Exception as exc:
         return _unknown_state(symbol, f"calculation error: {exc}")

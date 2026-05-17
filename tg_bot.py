@@ -354,6 +354,11 @@ content:
                 f"volume_ratio={market_state.get('volume_ratio_1m')} "
                 f"bb={market_state.get('bb_position')} "
                 f"breakout={market_state.get('breakout')} "
+                f"bull_count={market_state.get('bullish_count')} "
+                f"bear_count={market_state.get('bearish_count')} "
+                f"confirm_count={market_state.get('confirmation_count')} "
+                f"bull_reasons={market_state.get('bullish_reasons')} "
+                f"bear_reasons={market_state.get('bearish_reasons')} "
                 f"reason={market_state.get('reason')}"
             )
             decision = generate_decision(
@@ -445,6 +450,11 @@ content:
                                     "volume_ratio_1m": market_state.get("volume_ratio_1m"),
                                     "bb_position": market_state.get("bb_position"),
                                     "breakout": market_state.get("breakout"),
+                                    "bullish_count": market_state.get("bullish_count"),
+                                    "bearish_count": market_state.get("bearish_count"),
+                                    "confirmation_count": market_state.get("confirmation_count"),
+                                    "bullish_reasons": market_state.get("bullish_reasons"),
+                                    "bearish_reasons": market_state.get("bearish_reasons"),
                                 },
                             )
                         else:
@@ -627,6 +637,11 @@ content:
                 f"volume_ratio={market_state.get('volume_ratio_1m')} "
                 f"bb={market_state.get('bb_position')} "
                 f"breakout={market_state.get('breakout')} "
+                f"bull_count={market_state.get('bullish_count')} "
+                f"bear_count={market_state.get('bearish_count')} "
+                f"confirm_count={market_state.get('confirmation_count')} "
+                f"bull_reasons={market_state.get('bullish_reasons')} "
+                f"bear_reasons={market_state.get('bearish_reasons')} "
                 f"reason={market_state.get('reason')}"
             )
             decision = generate_decision(
@@ -718,6 +733,11 @@ content:
                                     "volume_ratio_1m": market_state.get("volume_ratio_1m"),
                                     "bb_position": market_state.get("bb_position"),
                                     "breakout": market_state.get("breakout"),
+                                    "bullish_count": market_state.get("bullish_count"),
+                                    "bearish_count": market_state.get("bearish_count"),
+                                    "confirmation_count": market_state.get("confirmation_count"),
+                                    "bullish_reasons": market_state.get("bullish_reasons"),
+                                    "bearish_reasons": market_state.get("bearish_reasons"),
                                 },
                             )
                         else:
