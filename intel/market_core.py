@@ -20,7 +20,7 @@ def confirm_market_core(action, price_snapshot):
     elif action == "short" and momentum < 0:
         score += 30
 
-    if abs(momentum) < 0.001:
+    if abs(momentum) < 0.0002:
         return {"confirmed": False, "score": 20, "reason": "momentum too weak"}
 
     if score >= 30:

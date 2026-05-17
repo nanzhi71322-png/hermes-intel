@@ -405,7 +405,7 @@ content:
                         symbol = keyword
                         price_snapshot = {
                             "current_price": market_price,
-                            "previous_price": previous_market_prices.get(symbol)
+                            "previous_price": previous_price
                         }
                         core_confirm = confirm_market_core(decision["action"], price_snapshot)
                         logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
@@ -657,7 +657,7 @@ content:
                         symbol = name
                         price_snapshot = {
                             "current_price": market_price,
-                            "previous_price": previous_market_prices.get(symbol)
+                            "previous_price": previous_price
                         }
                         core_confirm = confirm_market_core(decision["action"], price_snapshot)
                         logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
