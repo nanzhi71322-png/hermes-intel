@@ -377,64 +377,67 @@ content:
                 previous_price = previous_market_prices.get(keyword)
                 previous_market_prices[keyword] = market_price
                 trade_size = None
-                if decision["confidence"] >= 80:
-                    trade_size = 10
-                elif decision["confidence"] >= 70:
-                    trade_size = 3
+                if decision["action"] not in ("long", "short"):
+                    logger.info(f"[trade skip] action={decision['action']} reason=not tradeable")
+                else:
+                    if decision["confidence"] >= 80:
+                        trade_size = 10
+                    elif decision["confidence"] >= 70:
+                        trade_size = 3
 
-                if trade_size is not None:
-                    logger.info(
-                        f"[trade sizing] confidence: {decision['confidence']} "
-                        f"size: {trade_size}"
-                    )
-                    market_confirmation = confirm_market_trade(
-                        decision["action"],
-                        market_price,
-                        previous_price,
-                    )
-                    logger.info(
-                        f"[market confirm] action={decision['action']} "
-                        f"confirmed={market_confirmation['confirmed']} "
-                        f"score={market_confirmation['market_score']} "
-                        f"reason={market_confirmation['reason']}"
-                    )
-                    if decision["action"] == last_trade_action:
-                        logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
-                        opened_position = None
-                    elif market_confirmation["confirmed"]:
-                        symbol = keyword
-                        price_snapshot = {
-                            "current_price": market_price,
-                            "previous_price": previous_price
-                        }
-                        core_confirm = confirm_market_core(decision["action"], price_snapshot)
-                        logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
-                        if not core_confirm["confirmed"]:
-                            continue
-
-                        opened_position = execute_virtual_trade(
-                            decision,
-                            market_price,
-                            keyword,
-                            size_override=trade_size,
-                            metadata={
-                                "confidence": decision["confidence"],
-                                "alpha_score": alpha["alpha_score"],
-                                "signal_score": signal["score"],
-                                "narrative": narrative["narrative"],
-                                "action": decision["action"],
-                            },
-                        )
-                    else:
-                        opened_position = None
-                    if opened_position:
-                        last_trade_action = decision["action"]
+                    if trade_size is not None:
                         logger.info(
-                            f"[trade opened] action: {decision['action']} "
-                            f"confidence: {decision['confidence']} "
-                            f"alpha: {alpha['alpha_score']}"
+                            f"[trade sizing] confidence: {decision['confidence']} "
+                            f"size: {trade_size}"
                         )
-                        mark_trade_opened(keyword)
+                        market_confirmation = confirm_market_trade(
+                            decision["action"],
+                            market_price,
+                            previous_price,
+                        )
+                        logger.info(
+                            f"[market confirm] action={decision['action']} "
+                            f"confirmed={market_confirmation['confirmed']} "
+                            f"score={market_confirmation['market_score']} "
+                            f"reason={market_confirmation['reason']}"
+                        )
+                        if decision["action"] == last_trade_action:
+                            logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
+                            opened_position = None
+                        elif market_confirmation["confirmed"]:
+                            symbol = keyword
+                            price_snapshot = {
+                                "current_price": market_price,
+                                "previous_price": previous_price
+                            }
+                            core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                            logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
+                            if not core_confirm["confirmed"]:
+                                continue
+
+                            opened_position = execute_virtual_trade(
+                                decision,
+                                market_price,
+                                keyword,
+                                size_override=trade_size,
+                                metadata={
+                                    "confidence": decision["confidence"],
+                                    "alpha_score": alpha["alpha_score"],
+                                    "signal_score": signal["score"],
+                                    "narrative": narrative["narrative"],
+                                    "action": decision["action"],
+                                },
+                            )
+                        else:
+                            opened_position = None
+                        if opened_position:
+                            last_trade_action = decision["action"]
+                            logger.info(
+                                f"[trade opened] action: {decision['action']} "
+                                f"confidence: {decision['confidence']} "
+                                f"alpha: {alpha['alpha_score']}"
+                            )
+                            mark_trade_opened(keyword)
                 update_positions(market_price, keyword)
             else:
                 logger.info("invalid price, skip trading")
@@ -629,64 +632,67 @@ content:
                 previous_price = previous_market_prices.get(name)
                 previous_market_prices[name] = market_price
                 trade_size = None
-                if decision["confidence"] >= 80:
-                    trade_size = 10
-                elif decision["confidence"] >= 70:
-                    trade_size = 3
+                if decision["action"] not in ("long", "short"):
+                    logger.info(f"[trade skip] action={decision['action']} reason=not tradeable")
+                else:
+                    if decision["confidence"] >= 80:
+                        trade_size = 10
+                    elif decision["confidence"] >= 70:
+                        trade_size = 3
 
-                if trade_size is not None:
-                    logger.info(
-                        f"[trade sizing] confidence: {decision['confidence']} "
-                        f"size: {trade_size}"
-                    )
-                    market_confirmation = confirm_market_trade(
-                        decision["action"],
-                        market_price,
-                        previous_price,
-                    )
-                    logger.info(
-                        f"[market confirm] action={decision['action']} "
-                        f"confirmed={market_confirmation['confirmed']} "
-                        f"score={market_confirmation['market_score']} "
-                        f"reason={market_confirmation['reason']}"
-                    )
-                    if decision["action"] == last_trade_action:
-                        logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
-                        opened_position = None
-                    elif market_confirmation["confirmed"]:
-                        symbol = name
-                        price_snapshot = {
-                            "current_price": market_price,
-                            "previous_price": previous_price
-                        }
-                        core_confirm = confirm_market_core(decision["action"], price_snapshot)
-                        logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
-                        if not core_confirm["confirmed"]:
-                            continue
-
-                        opened_position = execute_virtual_trade(
-                            decision,
-                            market_price,
-                            name,
-                            size_override=trade_size,
-                            metadata={
-                                "confidence": decision["confidence"],
-                                "alpha_score": alpha["alpha_score"],
-                                "signal_score": signal["score"],
-                                "narrative": narrative["narrative"],
-                                "action": decision["action"],
-                            },
-                        )
-                    else:
-                        opened_position = None
-                    if opened_position:
-                        last_trade_action = decision["action"]
+                    if trade_size is not None:
                         logger.info(
-                            f"[trade opened] action: {decision['action']} "
-                            f"confidence: {decision['confidence']} "
-                            f"alpha: {alpha['alpha_score']}"
+                            f"[trade sizing] confidence: {decision['confidence']} "
+                            f"size: {trade_size}"
                         )
-                        mark_trade_opened(name)
+                        market_confirmation = confirm_market_trade(
+                            decision["action"],
+                            market_price,
+                            previous_price,
+                        )
+                        logger.info(
+                            f"[market confirm] action={decision['action']} "
+                            f"confirmed={market_confirmation['confirmed']} "
+                            f"score={market_confirmation['market_score']} "
+                            f"reason={market_confirmation['reason']}"
+                        )
+                        if decision["action"] == last_trade_action:
+                            logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
+                            opened_position = None
+                        elif market_confirmation["confirmed"]:
+                            symbol = name
+                            price_snapshot = {
+                                "current_price": market_price,
+                                "previous_price": previous_price
+                            }
+                            core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                            logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
+                            if not core_confirm["confirmed"]:
+                                continue
+
+                            opened_position = execute_virtual_trade(
+                                decision,
+                                market_price,
+                                name,
+                                size_override=trade_size,
+                                metadata={
+                                    "confidence": decision["confidence"],
+                                    "alpha_score": alpha["alpha_score"],
+                                    "signal_score": signal["score"],
+                                    "narrative": narrative["narrative"],
+                                    "action": decision["action"],
+                                },
+                            )
+                        else:
+                            opened_position = None
+                        if opened_position:
+                            last_trade_action = decision["action"]
+                            logger.info(
+                                f"[trade opened] action: {decision['action']} "
+                                f"confidence: {decision['confidence']} "
+                                f"alpha: {alpha['alpha_score']}"
+                            )
+                            mark_trade_opened(name)
                 update_positions(market_price, name)
             else:
                 logger.info("invalid price, skip trading")
