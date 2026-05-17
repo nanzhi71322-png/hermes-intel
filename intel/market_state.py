@@ -247,3 +247,43 @@ def get_btc_market_state(symbol="BTCUSDT"):
         }
     except Exception as exc:
         return _unknown_state(symbol, f"calculation error: {exc}")
+
+
+def build_market_candidate(market_state):
+    market_bias = market_state.get("market_bias")
+    score = market_state.get("score", 0)
+    confirmation_count = market_state.get("confirmation_count", 0)
+
+    if market_bias == "bullish" and score >= 85 and confirmation_count >= 3:
+        return {
+            "action": "long",
+            "confidence": 80,
+            "reason": "strong bullish market structure candidate",
+        }
+
+    if market_bias == "bearish" and score >= 85 and confirmation_count >= 3:
+        return {
+            "action": "short",
+            "confidence": 80,
+            "reason": "strong bearish market structure candidate",
+        }
+
+    if market_bias == "bullish" and score >= 70 and confirmation_count >= 2:
+        return {
+            "action": "watch",
+            "confidence": 65,
+            "reason": "bullish setup but not strong enough for autonomous candidate",
+        }
+
+    if market_bias == "bearish" and score >= 70 and confirmation_count >= 2:
+        return {
+            "action": "watch",
+            "confidence": 65,
+            "reason": "bearish setup but not strong enough for autonomous candidate",
+        }
+
+    return {
+        "action": "watch",
+        "confidence": 50,
+        "reason": "market structure has no autonomous candidate",
+    }

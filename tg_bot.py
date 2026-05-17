@@ -30,7 +30,7 @@ from intel.feedback_engine import evaluate_decisions, extract_price_from_text, r
 from intel.market_confirmation import confirm_market_trade
 from intel.market_core import confirm_market_core
 from intel.market_price import get_btc_price
-from intel.market_state import get_btc_market_state
+from intel.market_state import build_market_candidate, get_btc_market_state
 from intel.opportunity_engine import generate_decision, mark_trade_opened
 from intel.paper_trading import execute_virtual_trade, update_positions
 from intel.signal_engine import score_signal
@@ -361,6 +361,12 @@ content:
                 f"bear_reasons={market_state.get('bearish_reasons')} "
                 f"reason={market_state.get('reason')}"
             )
+            market_candidate = build_market_candidate(market_state)
+            logger.info(
+                f"[market candidate] action={market_candidate['action']} "
+                f"confidence={market_candidate['confidence']} "
+                f"reason={market_candidate['reason']}"
+            )
             decision = generate_decision(
                 signal,
                 alpha,
@@ -455,6 +461,9 @@ content:
                                     "confirmation_count": market_state.get("confirmation_count"),
                                     "bullish_reasons": market_state.get("bullish_reasons"),
                                     "bearish_reasons": market_state.get("bearish_reasons"),
+                                    "market_candidate_action": market_candidate.get("action"),
+                                    "market_candidate_confidence": market_candidate.get("confidence"),
+                                    "market_candidate_reason": market_candidate.get("reason"),
                                 },
                             )
                         else:
@@ -644,6 +653,12 @@ content:
                 f"bear_reasons={market_state.get('bearish_reasons')} "
                 f"reason={market_state.get('reason')}"
             )
+            market_candidate = build_market_candidate(market_state)
+            logger.info(
+                f"[market candidate] action={market_candidate['action']} "
+                f"confidence={market_candidate['confidence']} "
+                f"reason={market_candidate['reason']}"
+            )
             decision = generate_decision(
                 signal,
                 alpha,
@@ -738,6 +753,9 @@ content:
                                     "confirmation_count": market_state.get("confirmation_count"),
                                     "bullish_reasons": market_state.get("bullish_reasons"),
                                     "bearish_reasons": market_state.get("bearish_reasons"),
+                                    "market_candidate_action": market_candidate.get("action"),
+                                    "market_candidate_confidence": market_candidate.get("confidence"),
+                                    "market_candidate_reason": market_candidate.get("reason"),
                                 },
                             )
                         else:
