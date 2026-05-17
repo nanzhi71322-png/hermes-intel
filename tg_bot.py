@@ -29,6 +29,10 @@ from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_act
 from intel.feedback_engine import evaluate_decisions, extract_price_from_text, record_decision
 from intel.market_confirmation import confirm_market_trade
 from intel.market_core import confirm_market_core
+from intel.market_candidate_tracker import (
+    evaluate_market_candidates,
+    record_market_candidate,
+)
 from intel.market_price import get_btc_price
 from intel.market_state import build_market_candidate, get_btc_market_state
 from intel.opportunity_engine import generate_decision, mark_trade_opened
@@ -376,6 +380,14 @@ content:
                 symbol=keyword,
                 current_price=market_price,
             )
+            record_market_candidate(
+                datetime.utcnow().isoformat(),
+                "BTCUSDT",
+                market_price,
+                market_candidate,
+                market_state,
+                decision,
+            )
             try:
                 logger.info("[tg debug] sending analysis preview")
                 debug_prefix = ""
@@ -477,6 +489,20 @@ content:
                             )
                             mark_trade_opened(keyword)
                 update_positions(market_price, keyword)
+                candidate_events = evaluate_market_candidates(
+                    datetime.utcnow().isoformat(),
+                    "BTCUSDT",
+                    market_price,
+                )
+                for event in candidate_events:
+                    logger.info(
+                        f"[market candidate result] horizon={event['horizon']} "
+                        f"action={event['action']} win={event['win']} "
+                        f"pnl_pct={event['pnl_pct']:.6f} "
+                        f"entry={event['entry_price']} current={event['current_price']} "
+                        f"confidence={event['confidence']} bias={event['market_bias']} "
+                        f"score={event['market_score']} reason={event['reason']}"
+                    )
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (
@@ -668,6 +694,14 @@ content:
                 symbol=name,
                 current_price=market_price,
             )
+            record_market_candidate(
+                datetime.utcnow().isoformat(),
+                "BTCUSDT",
+                market_price,
+                market_candidate,
+                market_state,
+                decision,
+            )
             try:
                 logger.info("[tg debug] sending analysis preview")
                 debug_prefix = ""
@@ -769,6 +803,20 @@ content:
                             )
                             mark_trade_opened(name)
                 update_positions(market_price, name)
+                candidate_events = evaluate_market_candidates(
+                    datetime.utcnow().isoformat(),
+                    "BTCUSDT",
+                    market_price,
+                )
+                for event in candidate_events:
+                    logger.info(
+                        f"[market candidate result] horizon={event['horizon']} "
+                        f"action={event['action']} win={event['win']} "
+                        f"pnl_pct={event['pnl_pct']:.6f} "
+                        f"entry={event['entry_price']} current={event['current_price']} "
+                        f"confidence={event['confidence']} bias={event['market_bias']} "
+                        f"score={event['market_score']} reason={event['reason']}"
+                    )
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (
