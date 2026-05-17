@@ -30,6 +30,13 @@ def confirm_market_trade(action, current_price, previous_price=None):
 
     momentum = (current_price - previous_price) / previous_price
 
+    if abs(momentum) < 0.0005:
+        return {
+            "confirmed": False,
+            "reason": "momentum too weak",
+            "market_score": 20,
+        }
+
     if action == "long" and momentum >= 0.0002:
         return {
             "confirmed": True,

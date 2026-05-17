@@ -45,6 +45,7 @@ DEBUG_BYPASS_SIGNAL_FILTER = os.getenv(
     "false"
 ).lower() == "true"
 previous_market_prices = {}
+last_trade_action = None
 
 AGENT_PROFILES = {
     "btc": {
@@ -233,6 +234,8 @@ async def read_agent_browser_body(name, url):
 
 
 async def autonomous_loop(chat_id, keyword):
+    global last_trade_action
+
     while True:
         try:
             url = build_x_search_url(keyword)
@@ -394,7 +397,10 @@ content:
                         f"score={market_confirmation['market_score']} "
                         f"reason={market_confirmation['reason']}"
                     )
-                    if market_confirmation["confirmed"]:
+                    if decision["action"] == last_trade_action:
+                        logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
+                        opened_position = None
+                    elif market_confirmation["confirmed"]:
                         opened_position = execute_virtual_trade(
                             decision,
                             market_price,
@@ -411,6 +417,7 @@ content:
                     else:
                         opened_position = None
                     if opened_position:
+                        last_trade_action = decision["action"]
                         logger.info(
                             f"[trade opened] action: {decision['action']} "
                             f"confidence: {decision['confidence']} "
@@ -457,6 +464,8 @@ content:
 
 
 async def agent_loop(chat_id, name):
+    global last_trade_action
+
     logger.info(f"[agent loop started] {name}")
 
     profile = AGENT_PROFILES[name]
@@ -630,7 +639,10 @@ content:
                         f"score={market_confirmation['market_score']} "
                         f"reason={market_confirmation['reason']}"
                     )
-                    if market_confirmation["confirmed"]:
+                    if decision["action"] == last_trade_action:
+                        logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
+                        opened_position = None
+                    elif market_confirmation["confirmed"]:
                         opened_position = execute_virtual_trade(
                             decision,
                             market_price,
@@ -647,6 +659,7 @@ content:
                     else:
                         opened_position = None
                     if opened_position:
+                        last_trade_action = decision["action"]
                         logger.info(
                             f"[trade opened] action: {decision['action']} "
                             f"confidence: {decision['confidence']} "
