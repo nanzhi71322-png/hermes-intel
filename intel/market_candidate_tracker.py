@@ -1,10 +1,17 @@
 from datetime import datetime
+from copy import deepcopy
 
 from loguru import logger
 
 
 MAX_PENDING_CANDIDATES = 200
 pending_candidates = []
+last_recorded_candidates = {}
+candidate_stats = {
+    "60s": {},
+    "180s": {},
+    "300s": {},
+}
 
 
 def _parse_timestamp(timestamp):
@@ -28,11 +35,22 @@ def record_market_candidate(
     if market_price is None:
         return
 
+    action = market_candidate.get("action")
+    duplicate_key = (symbol, action)
+    try:
+        recorded_at = _parse_timestamp(timestamp)
+        last_recorded_at = last_recorded_candidates.get(duplicate_key)
+        if last_recorded_at and (recorded_at - last_recorded_at).total_seconds() < 60:
+            return
+        last_recorded_candidates[duplicate_key] = recorded_at
+    except (TypeError, ValueError):
+        pass
+
     candidate = {
         "timestamp": timestamp,
         "symbol": symbol,
         "entry_price": float(market_price),
-        "action": market_candidate.get("action"),
+        "action": action,
         "confidence": market_candidate.get("confidence"),
         "reason": market_candidate.get("reason"),
         "market_bias": market_state.get("market_bias"),
@@ -53,6 +71,33 @@ def record_market_candidate(
 
     if len(pending_candidates) > MAX_PENDING_CANDIDATES:
         del pending_candidates[:len(pending_candidates) - MAX_PENDING_CANDIDATES]
+
+
+def _update_stats(horizon, action, pnl_pct, win):
+    action_stats = candidate_stats.setdefault(horizon, {}).setdefault(
+        action,
+        {
+            "count": 0,
+            "wins": 0,
+            "losses": 0,
+            "total_pnl_pct": 0.0,
+            "avg_pnl_pct": 0.0,
+            "win_rate": 0.0,
+        },
+    )
+
+    action_stats["count"] += 1
+    if win:
+        action_stats["wins"] += 1
+    else:
+        action_stats["losses"] += 1
+    action_stats["total_pnl_pct"] += pnl_pct
+    action_stats["avg_pnl_pct"] = action_stats["total_pnl_pct"] / action_stats["count"]
+    action_stats["win_rate"] = action_stats["wins"] / action_stats["count"]
+
+
+def get_market_candidate_stats():
+    return deepcopy(candidate_stats)
 
 
 def _build_event(candidate, current_price, horizon):
@@ -76,7 +121,15 @@ def _build_event(candidate, current_price, horizon):
         "market_bias": candidate["market_bias"],
         "market_score": candidate["market_score"],
         "reason": candidate["reason"],
+        "decision_action": candidate["decision_action"],
+        "decision_confidence": candidate["decision_confidence"],
+        "confirmation_count": candidate["confirmation_count"],
+        "bullish_count": candidate["bullish_count"],
+        "bearish_count": candidate["bearish_count"],
+        "bullish_reasons": candidate["bullish_reasons"],
+        "bearish_reasons": candidate["bearish_reasons"],
     }
+    _update_stats(horizon, action, pnl_pct, event["win"])
     logger.info(
         f"[market candidate tracker] horizon={horizon} "
         f"action={action} pnl_pct={pnl_pct:.6f}"

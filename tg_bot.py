@@ -31,6 +31,7 @@ from intel.market_confirmation import confirm_market_trade
 from intel.market_core import confirm_market_core
 from intel.market_candidate_tracker import (
     evaluate_market_candidates,
+    get_market_candidate_stats,
     record_market_candidate,
 )
 from intel.market_price import get_btc_price
@@ -503,6 +504,16 @@ content:
                         f"confidence={event['confidence']} bias={event['market_bias']} "
                         f"score={event['market_score']} reason={event['reason']}"
                     )
+                    stats = get_market_candidate_stats()
+                    event_stats = stats.get(event["horizon"], {}).get(event["action"], {})
+                    logger.info(
+                        f"[market candidate stats] horizon={event['horizon']} "
+                        f"action={event['action']} count={event_stats.get('count', 0)} "
+                        f"wins={event_stats.get('wins', 0)} "
+                        f"losses={event_stats.get('losses', 0)} "
+                        f"win_rate={event_stats.get('win_rate', 0):.4f} "
+                        f"avg_pnl_pct={event_stats.get('avg_pnl_pct', 0):.6f}"
+                    )
             else:
                 logger.info("invalid price, skip trading")
             decision_prefix = (
@@ -816,6 +827,16 @@ content:
                         f"entry={event['entry_price']} current={event['current_price']} "
                         f"confidence={event['confidence']} bias={event['market_bias']} "
                         f"score={event['market_score']} reason={event['reason']}"
+                    )
+                    stats = get_market_candidate_stats()
+                    event_stats = stats.get(event["horizon"], {}).get(event["action"], {})
+                    logger.info(
+                        f"[market candidate stats] horizon={event['horizon']} "
+                        f"action={event['action']} count={event_stats.get('count', 0)} "
+                        f"wins={event_stats.get('wins', 0)} "
+                        f"losses={event_stats.get('losses', 0)} "
+                        f"win_rate={event_stats.get('win_rate', 0):.4f} "
+                        f"avg_pnl_pct={event_stats.get('avg_pnl_pct', 0):.6f}"
                     )
             else:
                 logger.info("invalid price, skip trading")
