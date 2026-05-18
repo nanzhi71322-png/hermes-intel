@@ -521,6 +521,8 @@ content:
                         f"action={edge['action']} count={edge['count']} "
                         f"win_rate={edge['win_rate']:.4f} "
                         f"avg_pnl_pct={edge['avg_pnl_pct']:.6f} "
+                        f"estimated_cost_pct={edge['estimated_cost_pct']:.6f} "
+                        f"net_avg_pnl_pct={edge['net_avg_pnl_pct']:.6f} "
                         f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
                     )
             else:
@@ -853,6 +855,8 @@ content:
                         f"action={edge['action']} count={edge['count']} "
                         f"win_rate={edge['win_rate']:.4f} "
                         f"avg_pnl_pct={edge['avg_pnl_pct']:.6f} "
+                        f"estimated_cost_pct={edge['estimated_cost_pct']:.6f} "
+                        f"net_avg_pnl_pct={edge['net_avg_pnl_pct']:.6f} "
                         f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
                     )
             else:

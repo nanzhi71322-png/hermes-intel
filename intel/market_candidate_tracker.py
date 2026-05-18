@@ -100,7 +100,12 @@ def get_market_candidate_stats():
     return deepcopy(candidate_stats)
 
 
-def get_best_market_candidate_edge(min_count=8):
+def get_best_market_candidate_edge(
+    min_count=30,
+    min_win_rate=0.55,
+    min_avg_pnl_pct=0.00015,
+    estimated_cost_pct=0.00010,
+):
     stats = get_market_candidate_stats()
     best_edge = None
 
@@ -108,11 +113,17 @@ def get_best_market_candidate_edge(min_count=8):
         for action, action_stats in horizon_stats.items():
             count = action_stats.get("count", 0)
             avg_pnl_pct = action_stats.get("avg_pnl_pct", 0.0)
-            if count < min_count or avg_pnl_pct <= 0:
+            win_rate = action_stats.get("win_rate", 0.0)
+            net_avg_pnl_pct = avg_pnl_pct - estimated_cost_pct
+            if (
+                count < min_count
+                or win_rate < min_win_rate
+                or avg_pnl_pct < min_avg_pnl_pct
+                or net_avg_pnl_pct <= 0
+            ):
                 continue
 
-            win_rate = action_stats.get("win_rate", 0.0)
-            edge_score = win_rate * avg_pnl_pct
+            edge_score = win_rate * net_avg_pnl_pct
             candidate_edge = {
                 "horizon": horizon,
                 "action": action,
@@ -121,8 +132,10 @@ def get_best_market_candidate_edge(min_count=8):
                 "losses": action_stats.get("losses", 0),
                 "win_rate": win_rate,
                 "avg_pnl_pct": avg_pnl_pct,
+                "estimated_cost_pct": estimated_cost_pct,
+                "net_avg_pnl_pct": net_avg_pnl_pct,
                 "edge_score": edge_score,
-                "reason": "best reliable positive edge",
+                "reason": "best reliable positive net edge",
             }
 
             if best_edge is None or edge_score > best_edge["edge_score"]:
@@ -139,8 +152,10 @@ def get_best_market_candidate_edge(min_count=8):
         "losses": 0,
         "win_rate": 0.0,
         "avg_pnl_pct": 0.0,
+        "estimated_cost_pct": estimated_cost_pct,
+        "net_avg_pnl_pct": 0.0,
         "edge_score": 0.0,
-        "reason": "no reliable positive edge",
+        "reason": "no reliable positive net edge",
     }
 
 
