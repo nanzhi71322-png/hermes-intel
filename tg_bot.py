@@ -38,7 +38,7 @@ from intel.market_candidate_tracker import (
 from intel.market_price import get_btc_price
 from intel.market_state import build_market_candidate, get_btc_market_state
 from intel.opportunity_engine import generate_decision, mark_trade_opened
-from intel.paper_trading import execute_virtual_trade, update_positions
+from intel.paper_trading import execute_virtual_trade, has_open_position, update_positions
 from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
 from utils.logging import setup_logging
@@ -455,10 +455,17 @@ content:
                             f"score={market_confirmation['market_score']} "
                             f"reason={market_confirmation['reason']}"
                         )
-                        if decision["action"] == last_trade_action:
+                        duplicate_position_open = has_open_position(keyword, decision["action"])
+                        logger.info(
+                            f"[trade chain] stage=duplicate_check "
+                            f"symbol={keyword} action={decision['action']} "
+                            f"has_open_position={duplicate_position_open} "
+                            f"last_trade_action={last_trade_action}"
+                        )
+                        if duplicate_position_open:
                             logger.info(
                                 f"[trade chain] stage=blocked_by_duplicate_trade "
-                                f"action={decision['action']} reason=duplicate_direction"
+                                f"action={decision['action']} reason=open_same_direction_position"
                             )
                             logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
                             opened_position = None
@@ -848,10 +855,17 @@ content:
                             f"score={market_confirmation['market_score']} "
                             f"reason={market_confirmation['reason']}"
                         )
-                        if decision["action"] == last_trade_action:
+                        duplicate_position_open = has_open_position(name, decision["action"])
+                        logger.info(
+                            f"[trade chain] stage=duplicate_check "
+                            f"symbol={name} action={decision['action']} "
+                            f"has_open_position={duplicate_position_open} "
+                            f"last_trade_action={last_trade_action}"
+                        )
+                        if duplicate_position_open:
                             logger.info(
                                 f"[trade chain] stage=blocked_by_duplicate_trade "
-                                f"action={decision['action']} reason=duplicate_direction"
+                                f"action={decision['action']} reason=open_same_direction_position"
                             )
                             logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
                             opened_position = None

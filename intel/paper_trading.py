@@ -131,6 +131,24 @@ def execute_virtual_trade(decision, price, symbol, metadata=None, size_override=
     return position
 
 
+def has_open_position(symbol, action):
+    _load_state()
+
+    if action not in ("long", "short"):
+        return False
+
+    for position in positions:
+        if position.get("symbol") != symbol:
+            continue
+        if position.get("type") != action:
+            continue
+        if position.get("status", "open") == "closed":
+            continue
+        return True
+
+    return False
+
+
 def update_positions(current_price, symbol):
     global balance
     global last_update_price
