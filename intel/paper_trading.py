@@ -116,11 +116,17 @@ def execute_virtual_trade(decision, price, symbol, metadata=None, size_override=
     if size <= 0:
         return None
 
+    underlying_asset = metadata.get("underlying_asset") if metadata else None
+    if not underlying_asset:
+        underlying_asset = symbol
+    underlying_asset = normalize_underlying_asset(underlying_asset)
+
     position = {
         "entry_price": entry_price,
         "type": action,
         "size": size,
         "symbol": symbol,
+        "underlying_asset": underlying_asset,
         "metadata": metadata or {},
         "timestamp": datetime.utcnow().isoformat(),
     }
@@ -139,6 +145,51 @@ def has_open_position(symbol, action):
 
     for position in positions:
         if position.get("symbol") != symbol:
+            continue
+        if position.get("type") != action:
+            continue
+        if position.get("status", "open") == "closed":
+            continue
+        return True
+
+    return False
+
+
+def normalize_underlying_asset(value):
+    if not value:
+        return value
+
+    normalized = str(value).strip().upper()
+
+    btc_aliases = {
+        "BTC",
+        "BITCOIN",
+        "BTCUSDT",
+        "BTC/USD",
+        "BTC-USD",
+        "BREAKING",
+        "SCAM",
+    }
+
+    if normalized in btc_aliases:
+        return "BTCUSDT"
+
+    return normalized
+
+
+def has_open_exposure(underlying_asset, action):
+    _load_state()
+
+    if action not in ("long", "short"):
+        return False
+
+    target_underlying = normalize_underlying_asset(underlying_asset)
+
+    for position in positions:
+        position_underlying = normalize_underlying_asset(
+            position.get("underlying_asset") or position.get("symbol")
+        )
+        if position_underlying != target_underlying:
             continue
         if position.get("type") != action:
             continue
