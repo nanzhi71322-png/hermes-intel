@@ -287,3 +287,49 @@ def build_market_candidate(market_state):
         "confidence": 50,
         "reason": "market structure has no autonomous candidate",
     }
+
+
+def confirm_market_state_for_execution(action, market_state):
+    market_state = market_state or {}
+    market_bias = market_state.get("market_bias", "unknown")
+    score = market_state.get("score", 0) or 0
+    confirmation_count = market_state.get("confirmation_count", 0) or 0
+
+    if action == "long":
+        if market_bias == "neutral":
+            reason = "market_state neutral blocks execution"
+        elif market_bias != "bullish":
+            reason = "market_state direction mismatch"
+        elif score < 70:
+            reason = "market_state score too weak"
+        elif confirmation_count < 2:
+            reason = "market_state confirmation_count too weak"
+        else:
+            return {
+                "confirmed": True,
+                "score": int(score),
+                "reason": "market_state confirms long",
+            }
+    elif action == "short":
+        if market_bias == "neutral":
+            reason = "market_state neutral blocks execution"
+        elif market_bias != "bearish":
+            reason = "market_state direction mismatch"
+        elif score < 70:
+            reason = "market_state score too weak"
+        elif confirmation_count < 2:
+            reason = "market_state confirmation_count too weak"
+        else:
+            return {
+                "confirmed": True,
+                "score": int(score),
+                "reason": "market_state confirms short",
+            }
+    else:
+        reason = "market_state action is not tradeable"
+
+    return {
+        "confirmed": False,
+        "score": int(score),
+        "reason": reason,
+    }

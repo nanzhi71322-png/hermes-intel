@@ -36,7 +36,11 @@ from intel.market_candidate_tracker import (
     record_market_candidate,
 )
 from intel.market_price import get_btc_price
-from intel.market_state import build_market_candidate, get_btc_market_state
+from intel.market_state import (
+    build_market_candidate,
+    confirm_market_state_for_execution,
+    get_btc_market_state,
+)
 from intel.opportunity_engine import generate_decision, mark_trade_opened
 from intel.paper_trading import execute_virtual_trade, has_open_exposure, update_positions
 from intel.signal_engine import score_signal
@@ -475,67 +479,87 @@ content:
                             opened_position = None
                         elif market_confirmation["confirmed"]:
                             symbol = keyword
-                            price_snapshot = {
-                                "current_price": market_price,
-                                "previous_price": previous_price
-                            }
-                            logger.info(
-                                f"[trade chain] stage=before_market_core "
-                                f"action={decision['action']} price={market_price} "
-                                f"previous_price={previous_price}"
+                            state_confirm = confirm_market_state_for_execution(
+                                decision["action"],
+                                market_state,
                             )
-                            core_confirm = confirm_market_core(decision["action"], price_snapshot)
                             logger.info(
-                                f"[trade chain] stage=after_market_core "
+                                f"[trade chain] stage=after_market_state_execution_filter "
                                 f"action={decision['action']} "
-                                f"confirmed={core_confirm['confirmed']} "
-                                f"score={core_confirm['score']} reason={core_confirm['reason']}"
+                                f"confirmed={state_confirm['confirmed']} "
+                                f"score={state_confirm['score']} "
+                                f"reason={state_confirm['reason']} "
+                                f"market_bias={market_state.get('market_bias')} "
+                                f"confirmation_count={market_state.get('confirmation_count')}"
                             )
-                            logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
-                            if not core_confirm["confirmed"]:
+                            if not state_confirm["confirmed"]:
                                 logger.info(
-                                    f"[trade chain] stage=blocked_by_market_core "
-                                    f"action={decision['action']} reason={core_confirm['reason']}"
+                                    f"[trade chain] stage=blocked_by_market_state "
+                                    f"action={decision['action']} reason={state_confirm['reason']}"
                                 )
-                                continue
+                                opened_position = None
+                            else:
+                                price_snapshot = {
+                                    "current_price": market_price,
+                                    "previous_price": previous_price
+                                }
+                                logger.info(
+                                    f"[trade chain] stage=before_market_core "
+                                    f"action={decision['action']} price={market_price} "
+                                    f"previous_price={previous_price}"
+                                )
+                                core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                                logger.info(
+                                    f"[trade chain] stage=after_market_core "
+                                    f"action={decision['action']} "
+                                    f"confirmed={core_confirm['confirmed']} "
+                                    f"score={core_confirm['score']} reason={core_confirm['reason']}"
+                                )
+                                logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
+                                if not core_confirm["confirmed"]:
+                                    logger.info(
+                                        f"[trade chain] stage=blocked_by_market_core "
+                                        f"action={decision['action']} reason={core_confirm['reason']}"
+                                    )
+                                    continue
 
-                            logger.info(
-                                f"[trade chain] stage=before_execute_virtual_trade "
-                                f"action={decision['action']} size={trade_size} "
-                                f"price={market_price} confidence={decision['confidence']}"
-                            )
-                            opened_position = execute_virtual_trade(
-                                decision,
-                                market_price,
-                                keyword,
-                                size_override=trade_size,
-                                metadata={
-                                    "confidence": decision["confidence"],
-                                    "alpha_score": alpha["alpha_score"],
-                                    "signal_score": signal["score"],
-                                    "narrative": narrative["narrative"],
-                                    "action": decision["action"],
-                                    "underlying_asset": underlying_asset,
-                                    "market_bias": market_state.get("market_bias"),
-                                    "market_score": market_state.get("score"),
-                                    "orderbook_imbalance": market_state.get("orderbook_imbalance"),
-                                    "volume_ratio_1m": market_state.get("volume_ratio_1m"),
-                                    "bb_position": market_state.get("bb_position"),
-                                    "breakout": market_state.get("breakout"),
-                                    "bullish_count": market_state.get("bullish_count"),
-                                    "bearish_count": market_state.get("bearish_count"),
-                                    "confirmation_count": market_state.get("confirmation_count"),
-                                    "bullish_reasons": market_state.get("bullish_reasons"),
-                                    "bearish_reasons": market_state.get("bearish_reasons"),
-                                    "market_candidate_action": market_candidate.get("action"),
-                                    "market_candidate_confidence": market_candidate.get("confidence"),
-                                    "market_candidate_reason": market_candidate.get("reason"),
-                                },
-                            )
-                            logger.info(
-                                f"[trade chain] stage=after_execute_virtual_trade "
-                                f"action={decision['action']} result={opened_position}"
-                            )
+                                logger.info(
+                                    f"[trade chain] stage=before_execute_virtual_trade "
+                                    f"action={decision['action']} size={trade_size} "
+                                    f"price={market_price} confidence={decision['confidence']}"
+                                )
+                                opened_position = execute_virtual_trade(
+                                    decision,
+                                    market_price,
+                                    keyword,
+                                    size_override=trade_size,
+                                    metadata={
+                                        "confidence": decision["confidence"],
+                                        "alpha_score": alpha["alpha_score"],
+                                        "signal_score": signal["score"],
+                                        "narrative": narrative["narrative"],
+                                        "action": decision["action"],
+                                        "underlying_asset": underlying_asset,
+                                        "market_bias": market_state.get("market_bias"),
+                                        "market_score": market_state.get("score"),
+                                        "orderbook_imbalance": market_state.get("orderbook_imbalance"),
+                                        "volume_ratio_1m": market_state.get("volume_ratio_1m"),
+                                        "bb_position": market_state.get("bb_position"),
+                                        "breakout": market_state.get("breakout"),
+                                        "bullish_count": market_state.get("bullish_count"),
+                                        "bearish_count": market_state.get("bearish_count"),
+                                        "confirmation_count": market_state.get("confirmation_count"),
+                                        "bullish_reasons": market_state.get("bullish_reasons"),
+                                        "bearish_reasons": market_state.get("bearish_reasons"),
+                                        "market_candidate_action": market_candidate.get("action"),
+                                        "market_candidate_confidence": market_candidate.get("confidence"),
+                                        "market_candidate_reason": market_candidate.get("reason"),
+                                    },
+                                )
+                                logger.info(
+                                    f"[trade chain] stage=after_execute_virtual_trade "
+                                    f"action={decision['action']} result={opened_position}"
+                                )
                         else:
                             logger.info(
                                 f"[trade chain] stage=blocked_by_market_confirm "
@@ -880,67 +904,87 @@ content:
                             opened_position = None
                         elif market_confirmation["confirmed"]:
                             symbol = name
-                            price_snapshot = {
-                                "current_price": market_price,
-                                "previous_price": previous_price
-                            }
-                            logger.info(
-                                f"[trade chain] stage=before_market_core "
-                                f"action={decision['action']} price={market_price} "
-                                f"previous_price={previous_price}"
+                            state_confirm = confirm_market_state_for_execution(
+                                decision["action"],
+                                market_state,
                             )
-                            core_confirm = confirm_market_core(decision["action"], price_snapshot)
                             logger.info(
-                                f"[trade chain] stage=after_market_core "
+                                f"[trade chain] stage=after_market_state_execution_filter "
                                 f"action={decision['action']} "
-                                f"confirmed={core_confirm['confirmed']} "
-                                f"score={core_confirm['score']} reason={core_confirm['reason']}"
+                                f"confirmed={state_confirm['confirmed']} "
+                                f"score={state_confirm['score']} "
+                                f"reason={state_confirm['reason']} "
+                                f"market_bias={market_state.get('market_bias')} "
+                                f"confirmation_count={market_state.get('confirmation_count')}"
                             )
-                            logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
-                            if not core_confirm["confirmed"]:
+                            if not state_confirm["confirmed"]:
                                 logger.info(
-                                    f"[trade chain] stage=blocked_by_market_core "
-                                    f"action={decision['action']} reason={core_confirm['reason']}"
+                                    f"[trade chain] stage=blocked_by_market_state "
+                                    f"action={decision['action']} reason={state_confirm['reason']}"
                                 )
-                                continue
+                                opened_position = None
+                            else:
+                                price_snapshot = {
+                                    "current_price": market_price,
+                                    "previous_price": previous_price
+                                }
+                                logger.info(
+                                    f"[trade chain] stage=before_market_core "
+                                    f"action={decision['action']} price={market_price} "
+                                    f"previous_price={previous_price}"
+                                )
+                                core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                                logger.info(
+                                    f"[trade chain] stage=after_market_core "
+                                    f"action={decision['action']} "
+                                    f"confirmed={core_confirm['confirmed']} "
+                                    f"score={core_confirm['score']} reason={core_confirm['reason']}"
+                                )
+                                logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
+                                if not core_confirm["confirmed"]:
+                                    logger.info(
+                                        f"[trade chain] stage=blocked_by_market_core "
+                                        f"action={decision['action']} reason={core_confirm['reason']}"
+                                    )
+                                    continue
 
-                            logger.info(
-                                f"[trade chain] stage=before_execute_virtual_trade "
-                                f"action={decision['action']} size={trade_size} "
-                                f"price={market_price} confidence={decision['confidence']}"
-                            )
-                            opened_position = execute_virtual_trade(
-                                decision,
-                                market_price,
-                                name,
-                                size_override=trade_size,
-                                metadata={
-                                    "confidence": decision["confidence"],
-                                    "alpha_score": alpha["alpha_score"],
-                                    "signal_score": signal["score"],
-                                    "narrative": narrative["narrative"],
-                                    "action": decision["action"],
-                                    "underlying_asset": underlying_asset,
-                                    "market_bias": market_state.get("market_bias"),
-                                    "market_score": market_state.get("score"),
-                                    "orderbook_imbalance": market_state.get("orderbook_imbalance"),
-                                    "volume_ratio_1m": market_state.get("volume_ratio_1m"),
-                                    "bb_position": market_state.get("bb_position"),
-                                    "breakout": market_state.get("breakout"),
-                                    "bullish_count": market_state.get("bullish_count"),
-                                    "bearish_count": market_state.get("bearish_count"),
-                                    "confirmation_count": market_state.get("confirmation_count"),
-                                    "bullish_reasons": market_state.get("bullish_reasons"),
-                                    "bearish_reasons": market_state.get("bearish_reasons"),
-                                    "market_candidate_action": market_candidate.get("action"),
-                                    "market_candidate_confidence": market_candidate.get("confidence"),
-                                    "market_candidate_reason": market_candidate.get("reason"),
-                                },
-                            )
-                            logger.info(
-                                f"[trade chain] stage=after_execute_virtual_trade "
-                                f"action={decision['action']} result={opened_position}"
-                            )
+                                logger.info(
+                                    f"[trade chain] stage=before_execute_virtual_trade "
+                                    f"action={decision['action']} size={trade_size} "
+                                    f"price={market_price} confidence={decision['confidence']}"
+                                )
+                                opened_position = execute_virtual_trade(
+                                    decision,
+                                    market_price,
+                                    name,
+                                    size_override=trade_size,
+                                    metadata={
+                                        "confidence": decision["confidence"],
+                                        "alpha_score": alpha["alpha_score"],
+                                        "signal_score": signal["score"],
+                                        "narrative": narrative["narrative"],
+                                        "action": decision["action"],
+                                        "underlying_asset": underlying_asset,
+                                        "market_bias": market_state.get("market_bias"),
+                                        "market_score": market_state.get("score"),
+                                        "orderbook_imbalance": market_state.get("orderbook_imbalance"),
+                                        "volume_ratio_1m": market_state.get("volume_ratio_1m"),
+                                        "bb_position": market_state.get("bb_position"),
+                                        "breakout": market_state.get("breakout"),
+                                        "bullish_count": market_state.get("bullish_count"),
+                                        "bearish_count": market_state.get("bearish_count"),
+                                        "confirmation_count": market_state.get("confirmation_count"),
+                                        "bullish_reasons": market_state.get("bullish_reasons"),
+                                        "bearish_reasons": market_state.get("bearish_reasons"),
+                                        "market_candidate_action": market_candidate.get("action"),
+                                        "market_candidate_confidence": market_candidate.get("confidence"),
+                                        "market_candidate_reason": market_candidate.get("reason"),
+                                    },
+                                )
+                                logger.info(
+                                    f"[trade chain] stage=after_execute_virtual_trade "
+                                    f"action={decision['action']} result={opened_position}"
+                                )
                         else:
                             logger.info(
                                 f"[trade chain] stage=blocked_by_market_confirm "
