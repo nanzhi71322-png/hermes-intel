@@ -416,6 +416,10 @@ content:
                 previous_market_prices[keyword] = market_price
                 trade_size = None
                 if decision["action"] not in ("long", "short"):
+                    logger.info(
+                        f"[trade chain] stage=blocked_by_non_tradeable_action "
+                        f"action={decision['action']} symbol={keyword}"
+                    )
                     logger.info(f"[trade skip] action={decision['action']} reason=not tradeable")
                 else:
                     if decision["confidence"] >= 80:
@@ -428,10 +432,22 @@ content:
                             f"[trade sizing] confidence: {decision['confidence']} "
                             f"size: {trade_size}"
                         )
+                        logger.info(
+                            f"[trade chain] stage=before_market_confirm "
+                            f"action={decision['action']} confidence={decision['confidence']} "
+                            f"size={trade_size} symbol={keyword} price={market_price}"
+                        )
                         market_confirmation = confirm_market_trade(
                             decision["action"],
                             market_price,
                             previous_price,
+                        )
+                        logger.info(
+                            f"[trade chain] stage=after_market_confirm "
+                            f"action={decision['action']} "
+                            f"confirmed={market_confirmation['confirmed']} "
+                            f"score={market_confirmation['market_score']} "
+                            f"reason={market_confirmation['reason']}"
                         )
                         logger.info(
                             f"[market confirm] action={decision['action']} "
@@ -440,6 +456,10 @@ content:
                             f"reason={market_confirmation['reason']}"
                         )
                         if decision["action"] == last_trade_action:
+                            logger.info(
+                                f"[trade chain] stage=blocked_by_duplicate_trade "
+                                f"action={decision['action']} reason=duplicate_direction"
+                            )
                             logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
                             opened_position = None
                         elif market_confirmation["confirmed"]:
@@ -448,11 +468,31 @@ content:
                                 "current_price": market_price,
                                 "previous_price": previous_price
                             }
+                            logger.info(
+                                f"[trade chain] stage=before_market_core "
+                                f"action={decision['action']} price={market_price} "
+                                f"previous_price={previous_price}"
+                            )
                             core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                            logger.info(
+                                f"[trade chain] stage=after_market_core "
+                                f"action={decision['action']} "
+                                f"confirmed={core_confirm['confirmed']} "
+                                f"score={core_confirm['score']} reason={core_confirm['reason']}"
+                            )
                             logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
                             if not core_confirm["confirmed"]:
+                                logger.info(
+                                    f"[trade chain] stage=blocked_by_market_core "
+                                    f"action={decision['action']} reason={core_confirm['reason']}"
+                                )
                                 continue
 
+                            logger.info(
+                                f"[trade chain] stage=before_execute_virtual_trade "
+                                f"action={decision['action']} size={trade_size} "
+                                f"price={market_price} confidence={decision['confidence']}"
+                            )
                             opened_position = execute_virtual_trade(
                                 decision,
                                 market_price,
@@ -480,7 +520,16 @@ content:
                                     "market_candidate_reason": market_candidate.get("reason"),
                                 },
                             )
+                            logger.info(
+                                f"[trade chain] stage=after_execute_virtual_trade "
+                                f"action={decision['action']} result={opened_position}"
+                            )
                         else:
+                            logger.info(
+                                f"[trade chain] stage=blocked_by_market_confirm "
+                                f"action={decision['action']} "
+                                f"reason={market_confirmation['reason']}"
+                            )
                             opened_position = None
                         if opened_position:
                             last_trade_action = decision["action"]
@@ -490,6 +539,12 @@ content:
                                 f"alpha: {alpha['alpha_score']}"
                             )
                             mark_trade_opened(keyword)
+                    else:
+                        logger.info(
+                            f"[trade chain] stage=blocked_by_confidence "
+                            f"action={decision['action']} confidence={decision['confidence']} "
+                            f"size={trade_size} symbol={keyword}"
+                        )
                 update_positions(market_price, keyword)
                 candidate_events = evaluate_market_candidates(
                     datetime.utcnow().isoformat(),
@@ -526,6 +581,10 @@ content:
                         f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
                     )
             else:
+                logger.info(
+                    f"[trade chain] stage=blocked_by_invalid_price "
+                    f"symbol={keyword} price={market_price}"
+                )
                 logger.info("invalid price, skip trading")
             decision_prefix = (
                 f"[decision: {decision['action'].upper()} | "
@@ -750,6 +809,10 @@ content:
                 previous_market_prices[name] = market_price
                 trade_size = None
                 if decision["action"] not in ("long", "short"):
+                    logger.info(
+                        f"[trade chain] stage=blocked_by_non_tradeable_action "
+                        f"action={decision['action']} symbol={name}"
+                    )
                     logger.info(f"[trade skip] action={decision['action']} reason=not tradeable")
                 else:
                     if decision["confidence"] >= 80:
@@ -762,10 +825,22 @@ content:
                             f"[trade sizing] confidence: {decision['confidence']} "
                             f"size: {trade_size}"
                         )
+                        logger.info(
+                            f"[trade chain] stage=before_market_confirm "
+                            f"action={decision['action']} confidence={decision['confidence']} "
+                            f"size={trade_size} symbol={name} price={market_price}"
+                        )
                         market_confirmation = confirm_market_trade(
                             decision["action"],
                             market_price,
                             previous_price,
+                        )
+                        logger.info(
+                            f"[trade chain] stage=after_market_confirm "
+                            f"action={decision['action']} "
+                            f"confirmed={market_confirmation['confirmed']} "
+                            f"score={market_confirmation['market_score']} "
+                            f"reason={market_confirmation['reason']}"
                         )
                         logger.info(
                             f"[market confirm] action={decision['action']} "
@@ -774,6 +849,10 @@ content:
                             f"reason={market_confirmation['reason']}"
                         )
                         if decision["action"] == last_trade_action:
+                            logger.info(
+                                f"[trade chain] stage=blocked_by_duplicate_trade "
+                                f"action={decision['action']} reason=duplicate_direction"
+                            )
                             logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
                             opened_position = None
                         elif market_confirmation["confirmed"]:
@@ -782,11 +861,31 @@ content:
                                 "current_price": market_price,
                                 "previous_price": previous_price
                             }
+                            logger.info(
+                                f"[trade chain] stage=before_market_core "
+                                f"action={decision['action']} price={market_price} "
+                                f"previous_price={previous_price}"
+                            )
                             core_confirm = confirm_market_core(decision["action"], price_snapshot)
+                            logger.info(
+                                f"[trade chain] stage=after_market_core "
+                                f"action={decision['action']} "
+                                f"confirmed={core_confirm['confirmed']} "
+                                f"score={core_confirm['score']} reason={core_confirm['reason']}"
+                            )
                             logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
                             if not core_confirm["confirmed"]:
+                                logger.info(
+                                    f"[trade chain] stage=blocked_by_market_core "
+                                    f"action={decision['action']} reason={core_confirm['reason']}"
+                                )
                                 continue
 
+                            logger.info(
+                                f"[trade chain] stage=before_execute_virtual_trade "
+                                f"action={decision['action']} size={trade_size} "
+                                f"price={market_price} confidence={decision['confidence']}"
+                            )
                             opened_position = execute_virtual_trade(
                                 decision,
                                 market_price,
@@ -814,7 +913,16 @@ content:
                                     "market_candidate_reason": market_candidate.get("reason"),
                                 },
                             )
+                            logger.info(
+                                f"[trade chain] stage=after_execute_virtual_trade "
+                                f"action={decision['action']} result={opened_position}"
+                            )
                         else:
+                            logger.info(
+                                f"[trade chain] stage=blocked_by_market_confirm "
+                                f"action={decision['action']} "
+                                f"reason={market_confirmation['reason']}"
+                            )
                             opened_position = None
                         if opened_position:
                             last_trade_action = decision["action"]
@@ -824,6 +932,12 @@ content:
                                 f"alpha: {alpha['alpha_score']}"
                             )
                             mark_trade_opened(name)
+                    else:
+                        logger.info(
+                            f"[trade chain] stage=blocked_by_confidence "
+                            f"action={decision['action']} confidence={decision['confidence']} "
+                            f"size={trade_size} symbol={name}"
+                        )
                 update_positions(market_price, name)
                 candidate_events = evaluate_market_candidates(
                     datetime.utcnow().isoformat(),
@@ -860,6 +974,10 @@ content:
                         f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
                     )
             else:
+                logger.info(
+                    f"[trade chain] stage=blocked_by_invalid_price "
+                    f"symbol={name} price={market_price}"
+                )
                 logger.info("invalid price, skip trading")
             decision_prefix = (
                 f"[decision: {decision['action'].upper()} | "
