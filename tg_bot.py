@@ -41,7 +41,11 @@ from intel.market_state import (
     confirm_market_state_for_execution,
     get_btc_market_state,
 )
-from intel.opportunity_engine import generate_decision, mark_trade_opened
+from intel.opportunity_engine import (
+    adjust_decision_for_market_direction,
+    generate_decision,
+    mark_trade_opened,
+)
 from intel.paper_trading import execute_virtual_trade, has_open_exposure, update_positions
 from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
@@ -386,6 +390,28 @@ content:
                 symbol=keyword,
                 current_price=market_price,
             )
+            price_snapshot = {
+                "current_price": market_price,
+                "previous_price": previous_market_prices.get(keyword),
+            }
+            direction_adjustment = adjust_decision_for_market_direction(
+                decision,
+                market_state,
+                price_snapshot,
+            )
+            decision = direction_adjustment["decision"]
+            logger.info(
+                f"[decision direction] "
+                f"original_action={direction_adjustment['original_action']} "
+                f"final_action={direction_adjustment['final_action']} "
+                f"changed={direction_adjustment['changed']} "
+                f"reason={direction_adjustment['reason']} "
+                f"market_bias={market_state.get('market_bias')} "
+                f"market_score={market_state.get('score')} "
+                f"confirmation_count={market_state.get('confirmation_count')} "
+                f"current_price={price_snapshot.get('current_price')} "
+                f"previous_price={price_snapshot.get('previous_price')}"
+            )
             record_market_candidate(
                 datetime.utcnow().isoformat(),
                 "BTCUSDT",
@@ -416,7 +442,7 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
-                previous_price = previous_market_prices.get(keyword)
+                previous_price = price_snapshot.get("previous_price")
                 previous_market_prices[keyword] = market_price
                 trade_size = None
                 if decision["action"] not in ("long", "short"):
@@ -539,6 +565,8 @@ content:
                                         "signal_score": signal["score"],
                                         "narrative": narrative["narrative"],
                                         "action": decision["action"],
+                                        "original_action": direction_adjustment["original_action"],
+                                        "direction_adjust_reason": direction_adjustment["reason"],
                                         "underlying_asset": underlying_asset,
                                         "market_bias": market_state.get("market_bias"),
                                         "market_score": market_state.get("score"),
@@ -811,6 +839,28 @@ content:
                 symbol=name,
                 current_price=market_price,
             )
+            price_snapshot = {
+                "current_price": market_price,
+                "previous_price": previous_market_prices.get(name),
+            }
+            direction_adjustment = adjust_decision_for_market_direction(
+                decision,
+                market_state,
+                price_snapshot,
+            )
+            decision = direction_adjustment["decision"]
+            logger.info(
+                f"[decision direction] "
+                f"original_action={direction_adjustment['original_action']} "
+                f"final_action={direction_adjustment['final_action']} "
+                f"changed={direction_adjustment['changed']} "
+                f"reason={direction_adjustment['reason']} "
+                f"market_bias={market_state.get('market_bias')} "
+                f"market_score={market_state.get('score')} "
+                f"confirmation_count={market_state.get('confirmation_count')} "
+                f"current_price={price_snapshot.get('current_price')} "
+                f"previous_price={price_snapshot.get('previous_price')}"
+            )
             record_market_candidate(
                 datetime.utcnow().isoformat(),
                 "BTCUSDT",
@@ -841,7 +891,7 @@ content:
             )
             evaluate_decisions()
             if market_price is not None and 30000 <= market_price <= 150000:
-                previous_price = previous_market_prices.get(name)
+                previous_price = price_snapshot.get("previous_price")
                 previous_market_prices[name] = market_price
                 trade_size = None
                 if decision["action"] not in ("long", "short"):
@@ -964,6 +1014,8 @@ content:
                                         "signal_score": signal["score"],
                                         "narrative": narrative["narrative"],
                                         "action": decision["action"],
+                                        "original_action": direction_adjustment["original_action"],
+                                        "direction_adjust_reason": direction_adjustment["reason"],
                                         "underlying_asset": underlying_asset,
                                         "market_bias": market_state.get("market_bias"),
                                         "market_score": market_state.get("score"),

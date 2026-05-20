@@ -268,3 +268,78 @@ def generate_decision(signal, alpha, whale, narrative, text, symbol=None, curren
         "risk": "unclear catalyst and poor signal quality",
         "timeframe": "long",
     }
+
+
+def _safe_number(value, default=0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def adjust_decision_for_market_direction(decision, market_state, price_snapshot):
+    adjusted_decision = dict(decision or {})
+    market_state = market_state or {}
+    price_snapshot = price_snapshot or {}
+
+    original_action = adjusted_decision.get("action")
+    final_action = original_action
+    market_bias = market_state.get("market_bias")
+    score = _safe_number(market_state.get("score"), 0)
+    confirmation_count = _safe_number(market_state.get("confirmation_count"), 0)
+    current_price = _safe_number(price_snapshot.get("current_price"), None)
+    previous_price = _safe_number(price_snapshot.get("previous_price"), None)
+
+    if (
+        original_action == "watch"
+        and market_bias == "bearish"
+        and score >= 85
+        and confirmation_count >= 3
+        and current_price is not None
+        and previous_price is not None
+        and current_price < previous_price
+    ):
+        existing_confidence = _safe_number(adjusted_decision.get("confidence"), 0)
+        adjusted_decision["action"] = "short"
+        adjusted_decision["confidence"] = min(max(existing_confidence, 80), 95)
+        adjusted_decision["reason"] = "strong bearish market_state promotes watch to short"
+        final_action = "short"
+        return {
+            "decision": adjusted_decision,
+            "changed": True,
+            "original_action": original_action,
+            "final_action": final_action,
+            "reason": "strong bearish market_state promotes watch to short",
+        }
+
+    if original_action == "long" and market_bias == "bearish":
+        adjusted_decision["action"] = "watch"
+        adjusted_decision["reason"] = "bearish market_state downgrades long to watch"
+        final_action = "watch"
+        return {
+            "decision": adjusted_decision,
+            "changed": True,
+            "original_action": original_action,
+            "final_action": final_action,
+            "reason": "bearish market_state downgrades long to watch",
+        }
+
+    if original_action == "short" and market_bias != "bearish":
+        adjusted_decision["action"] = "watch"
+        adjusted_decision["reason"] = "non-bearish market_state downgrades short to watch"
+        final_action = "watch"
+        return {
+            "decision": adjusted_decision,
+            "changed": True,
+            "original_action": original_action,
+            "final_action": final_action,
+            "reason": "non-bearish market_state downgrades short to watch",
+        }
+
+    return {
+        "decision": adjusted_decision,
+        "changed": False,
+        "original_action": original_action,
+        "final_action": final_action,
+        "reason": "decision direction unchanged",
+    }
