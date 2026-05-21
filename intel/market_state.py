@@ -333,3 +333,57 @@ def confirm_market_state_for_execution(action, market_state):
         "score": int(score),
         "reason": reason,
     }
+
+
+def confirm_long_quality_for_execution(action, market_state):
+    market_state = market_state or {}
+
+    score = market_state.get("score", 0) or 0
+    confirmation_count = market_state.get("confirmation_count", 0) or 0
+    breakout = market_state.get("breakout")
+    bb_position = market_state.get("bb_position") or market_state.get("bb")
+    market_bias = market_state.get("market_bias")
+
+    try:
+        score = int(score)
+    except (TypeError, ValueError):
+        score = 0
+
+    try:
+        confirmation_count = int(confirmation_count)
+    except (TypeError, ValueError):
+        confirmation_count = 0
+
+    if action != "long":
+        return {
+            "confirmed": True,
+            "score": score,
+            "reason": "non-long action bypasses long quality filter",
+        }
+
+    if market_bias != "bullish":
+        return {
+            "confirmed": False,
+            "score": score,
+            "reason": "long quality blocks non-bullish market_state",
+        }
+
+    if score < 85 and confirmation_count < 3 and breakout != "up":
+        return {
+            "confirmed": False,
+            "score": score,
+            "reason": "long quality too weak without breakout",
+        }
+
+    if breakout == "up":
+        reason = "long quality confirms breakout up"
+    elif confirmation_count >= 3:
+        reason = "long quality confirms high confirmation count"
+    else:
+        reason = "long quality confirms strong bullish structure"
+
+    return {
+        "confirmed": True,
+        "score": score,
+        "reason": reason,
+    }
