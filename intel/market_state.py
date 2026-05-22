@@ -343,6 +343,7 @@ def confirm_long_quality_for_execution(action, market_state):
     breakout = market_state.get("breakout")
     bb_position = market_state.get("bb_position") or market_state.get("bb")
     market_bias = market_state.get("market_bias")
+    orderbook_imbalance = market_state.get("orderbook_imbalance")
 
     try:
         score = int(score)
@@ -353,6 +354,11 @@ def confirm_long_quality_for_execution(action, market_state):
         confirmation_count = int(confirmation_count)
     except (TypeError, ValueError):
         confirmation_count = 0
+
+    try:
+        orderbook_imbalance = float(orderbook_imbalance)
+    except (TypeError, ValueError):
+        orderbook_imbalance = 0.0
 
     if action != "long":
         return {
@@ -368,6 +374,27 @@ def confirm_long_quality_for_execution(action, market_state):
             "reason": "long quality blocks non-bullish market_state",
         }
 
+    if bb_position == "outside_upper":
+        return {
+            "confirmed": False,
+            "score": score,
+            "reason": "long quality blocks outside_upper chase",
+        }
+
+    if bb_position == "upper" and breakout != "up":
+        return {
+            "confirmed": False,
+            "score": score,
+            "reason": "long quality blocks upper-band long without breakout",
+        }
+
+    if breakout == "up" and orderbook_imbalance < 0:
+        return {
+            "confirmed": False,
+            "score": score,
+            "reason": "long quality blocks breakout without bid support",
+        }
+
     if score < 85 and confirmation_count < 3 and breakout != "up":
         return {
             "confirmed": False,
@@ -376,7 +403,7 @@ def confirm_long_quality_for_execution(action, market_state):
         }
 
     if breakout == "up":
-        reason = "long quality confirms breakout up"
+        reason = "long quality confirms breakout up with bid support"
     elif confirmation_count >= 3:
         reason = "long quality confirms high confirmation count"
     else:
