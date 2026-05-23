@@ -61,6 +61,7 @@ DEBUG_BYPASS_SIGNAL_FILTER = os.getenv(
     "DEBUG_BYPASS_SIGNAL_FILTER",
     "false"
 ).lower() == "true"
+TELEGRAM_NOTIFY_MODE = os.getenv("TELEGRAM_NOTIFY_MODE", "trade_only").lower()
 previous_market_prices = {}
 last_trade_action = None
 
@@ -91,6 +92,10 @@ AGENT_PROFILES = {
         "focus": "urgent news, exchange issues, hacks, regulation, ETF, liquidation cascades, major announcements"
     }
 }
+
+
+def should_send_analysis_message():
+    return TELEGRAM_NOTIFY_MODE == "all"
 
 
 def is_bad_x_page(text):
@@ -427,10 +432,11 @@ content:
                 if decision["confidence"] < 70:
                     debug_prefix = "[DEBUG LOW SIGNAL]\n"
 
-                await app.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"{debug_prefix}{answer[:800]}"
-                )
+                if should_send_analysis_message():
+                    await app.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"{debug_prefix}{answer[:800]}"
+                    )
             except Exception as e:
                 logger.error(f"[tg debug error] {e}")
 
@@ -626,6 +632,27 @@ content:
                                 f"alpha: {alpha['alpha_score']}"
                             )
                             mark_trade_opened(keyword)
+                            try:
+                                await app.bot.send_message(
+                                    chat_id=chat_id,
+                                    text=(
+                                        "🚀 Hermes paper trade opened\n"
+                                        f"action: {str(decision.get('action')).upper()}\n"
+                                        f"symbol: {keyword}\n"
+                                        f"underlying: {opened_position.get('underlying_asset') or underlying_asset}\n"
+                                        f"entry: {opened_position.get('entry_price')}\n"
+                                        f"size: {opened_position.get('size')}\n"
+                                        f"confidence: {decision.get('confidence')}\n"
+                                        f"bias: {market_state.get('market_bias')}\n"
+                                        f"score: {market_state.get('score')}\n"
+                                        f"cc: {market_state.get('confirmation_count')}\n"
+                                        f"breakout: {market_state.get('breakout')}\n"
+                                        f"bb: {market_state.get('bb_position')}\n"
+                                        f"reason: {direction_adjustment.get('reason')}"
+                                    )
+                                )
+                            except Exception as notify_error:
+                                logger.error(f"[telegram notify error] trade_opened {notify_error}")
                     else:
                         logger.info(
                             f"[trade chain] stage=blocked_by_confidence "
@@ -689,10 +716,11 @@ content:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
                 continue
 
-            await app.bot.send_message(
-                chat_id=chat_id,
-                text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[autonomous: {keyword}]\n\n{answer}"
-            )
+            if should_send_analysis_message():
+                await app.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[autonomous: {keyword}]\n\n{answer}"
+                )
 
         except asyncio.TimeoutError:
             logger.warning(f"[agent timeout] browser step timed out: {keyword}")
@@ -898,10 +926,11 @@ content:
                 if decision["confidence"] < 70:
                     debug_prefix = "[DEBUG LOW SIGNAL]\n"
 
-                await app.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"{debug_prefix}{answer[:800]}"
-                )
+                if should_send_analysis_message():
+                    await app.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"{debug_prefix}{answer[:800]}"
+                    )
             except Exception as e:
                 logger.error(f"[tg debug error] {e}")
 
@@ -1097,6 +1126,27 @@ content:
                                 f"alpha: {alpha['alpha_score']}"
                             )
                             mark_trade_opened(name)
+                            try:
+                                await app.bot.send_message(
+                                    chat_id=chat_id,
+                                    text=(
+                                        "🚀 Hermes paper trade opened\n"
+                                        f"action: {str(decision.get('action')).upper()}\n"
+                                        f"symbol: {name}\n"
+                                        f"underlying: {opened_position.get('underlying_asset') or underlying_asset}\n"
+                                        f"entry: {opened_position.get('entry_price')}\n"
+                                        f"size: {opened_position.get('size')}\n"
+                                        f"confidence: {decision.get('confidence')}\n"
+                                        f"bias: {market_state.get('market_bias')}\n"
+                                        f"score: {market_state.get('score')}\n"
+                                        f"cc: {market_state.get('confirmation_count')}\n"
+                                        f"breakout: {market_state.get('breakout')}\n"
+                                        f"bb: {market_state.get('bb_position')}\n"
+                                        f"reason: {direction_adjustment.get('reason')}"
+                                    )
+                                )
+                            except Exception as notify_error:
+                                logger.error(f"[telegram notify error] trade_opened {notify_error}")
                     else:
                         logger.info(
                             f"[trade chain] stage=blocked_by_confidence "
@@ -1160,10 +1210,11 @@ content:
                 logger.info(f"filtered signal: {signal['level'].upper()} {signal['score']}")
                 continue
 
-            await app.bot.send_message(
-                chat_id=chat_id,
-                text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[agent:{name}]\n\n{answer}"
-            )
+            if should_send_analysis_message():
+                await app.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"{signal_prefix}\n{alpha_prefix}\n{decision_prefix}\n[agent:{name}]\n\n{answer}"
+                )
 
         except asyncio.TimeoutError:
             logger.warning(f"[agent timeout] browser step timed out: {name}")
