@@ -99,8 +99,4 @@ assert tg_bot_text.count("if should_send_analysis_message():") >= 2, (
     "normal analysis sends must remain gated by should_send_analysis_message()"
 )
 
-assert not (root / "notifications" / "trade_notifications.py").exists(), (
-    "notifications/trade_notifications.py must not exist before P2.13 extraction"
-)
-
 print("P2.13a trade opened notification contract checks passed")
