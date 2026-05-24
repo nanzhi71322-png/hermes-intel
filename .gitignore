@@ -9,3 +9,7 @@ logs/
 screenshots/
 *.bak*
 autonomous_tasks.json
+data/backtest/*.csv
+data/backtest/results/
+data/paper_portfolio.json
+decision_feedback.jsonl

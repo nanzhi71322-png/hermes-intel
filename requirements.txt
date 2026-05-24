@@ -5,3 +5,7 @@ python-dotenv==1.2.2
 python-telegram-bot==22.7
 redis==7.4.0
 requests==2.33.1
+ccxt>=4.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+optuna>=3.0.0
