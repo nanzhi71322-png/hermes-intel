@@ -27,29 +27,18 @@ from config.settings import (
 )
 from intel.alpha_engine import compute_alpha, detect_narrative, detect_whale_activity
 from intel.feedback_engine import evaluate_decisions, extract_price_from_text, record_decision
-from intel.market_confirmation import confirm_market_trade
-from intel.market_core import confirm_market_core
-from intel.market_candidate_tracker import (
-    evaluate_market_candidates,
-    get_best_market_candidate_edge,
-    get_market_candidate_stats,
-    record_market_candidate,
-)
+from intel.market_candidate_tracker import record_market_candidate
 from intel.market_price import get_btc_price
-from intel.market_state import (
-    build_market_candidate,
-    confirm_long_quality_for_execution,
-    confirm_market_state_for_execution,
-    get_btc_market_state,
-)
-from intel.opportunity_engine import (
-    adjust_decision_for_market_direction,
-    generate_decision,
-    mark_trade_opened,
-)
-from intel.paper_trading import execute_virtual_trade, has_open_exposure, update_positions
+from intel.market_state import build_market_candidate, get_btc_market_state
+from intel.opportunity_engine import adjust_decision_for_market_direction, generate_decision
 from intel.signal_engine import score_signal
 from memory.signals import filter_new_signals
+from notifications.trade_notifications import send_trade_opened_notification
+from pipeline.context import TradePipelineContext
+from pipeline.trade_pipeline import run_trade_pipeline
+from trading.factory import get_executor
+from trading.risk.manager import RiskManager
+from trading.daily_report import daily_report_loop
 from utils.logging import setup_logging
 from utils.urls import build_x_search_url
 
@@ -64,6 +53,8 @@ DEBUG_BYPASS_SIGNAL_FILTER = os.getenv(
 TELEGRAM_NOTIFY_MODE = os.getenv("TELEGRAM_NOTIFY_MODE", "trade_only").lower()
 previous_market_prices = {}
 last_trade_action = None
+trade_executor = get_executor()
+trade_risk_manager = RiskManager()
 
 AGENT_PROFILES = {
     "btc": {
@@ -96,6 +87,71 @@ AGENT_PROFILES = {
 
 def should_send_analysis_message():
     return TELEGRAM_NOTIFY_MODE == "all"
+
+
+async def process_trade_cycle(
+    source_key,
+    chat_id,
+    decision,
+    market_price,
+    price_snapshot,
+    market_state,
+    market_candidate,
+    direction_adjustment,
+    signal,
+    alpha,
+    narrative,
+):
+    global last_trade_action
+
+    if market_price is None or not (30000 <= market_price <= 150000):
+        logger.info(
+            f"[trade chain] stage=blocked_by_invalid_price "
+            f"symbol={source_key} price={market_price}"
+        )
+        logger.info("invalid price, skip trading")
+        return False
+
+    previous_market_prices[source_key] = market_price
+    trade_ctx = TradePipelineContext(
+        source_key=source_key,
+        decision=decision,
+        market_price=market_price,
+        previous_price=price_snapshot.get("previous_price"),
+        market_state=market_state,
+        market_candidate=market_candidate,
+        direction_adjustment=direction_adjustment,
+        signal=signal,
+        alpha=alpha,
+        narrative=narrative,
+        underlying_asset="BTCUSDT",
+        last_trade_action=last_trade_action,
+    )
+    trade_result = run_trade_pipeline(
+        trade_ctx,
+        trade_executor,
+        trade_risk_manager,
+    )
+
+    if trade_result.skip_signal_send:
+        return True
+
+    if trade_result.opened_position:
+        last_trade_action = trade_result.last_trade_action
+        await send_trade_opened_notification(
+            app.bot,
+            chat_id,
+            decision,
+            source_key,
+            trade_result.opened_position,
+            trade_ctx.underlying_asset,
+            market_state,
+            direction_adjustment,
+            logger,
+            trading_mode=trade_executor.mode,
+        )
+
+    return False
 
 
 def is_bad_x_page(text):
@@ -440,266 +496,28 @@ content:
             except Exception as e:
                 logger.error(f"[tg debug error] {e}")
 
-            price = extract_price_from_text(answer)
+            price = extract_price_from_text(answer) or market_price
             record_decision(
                 datetime.utcnow().isoformat(),
                 {**decision, "narrative": narrative["narrative"]},
                 price,
                 keyword,
             )
-            evaluate_decisions()
-            if market_price is not None and 30000 <= market_price <= 150000:
-                previous_price = price_snapshot.get("previous_price")
-                previous_market_prices[keyword] = market_price
-                trade_size = None
-                if decision["action"] not in ("long", "short"):
-                    logger.info(
-                        f"[trade chain] stage=blocked_by_non_tradeable_action "
-                        f"action={decision['action']} symbol={keyword}"
-                    )
-                    logger.info(f"[trade skip] action={decision['action']} reason=not tradeable")
-                else:
-                    if decision["confidence"] >= 80:
-                        trade_size = 10
-                    elif decision["confidence"] >= 70:
-                        trade_size = 3
-
-                    if trade_size is not None:
-                        logger.info(
-                            f"[trade sizing] confidence: {decision['confidence']} "
-                            f"size: {trade_size}"
-                        )
-                        logger.info(
-                            f"[trade chain] stage=before_market_confirm "
-                            f"action={decision['action']} confidence={decision['confidence']} "
-                            f"size={trade_size} symbol={keyword} price={market_price}"
-                        )
-                        market_confirmation = confirm_market_trade(
-                            decision["action"],
-                            market_price,
-                            previous_price,
-                        )
-                        logger.info(
-                            f"[trade chain] stage=after_market_confirm "
-                            f"action={decision['action']} "
-                            f"confirmed={market_confirmation['confirmed']} "
-                            f"score={market_confirmation['market_score']} "
-                            f"reason={market_confirmation['reason']}"
-                        )
-                        logger.info(
-                            f"[market confirm] action={decision['action']} "
-                            f"confirmed={market_confirmation['confirmed']} "
-                            f"score={market_confirmation['market_score']} "
-                            f"reason={market_confirmation['reason']}"
-                        )
-                        underlying_asset = "BTCUSDT"
-                        duplicate_exposure_open = has_open_exposure(underlying_asset, decision["action"])
-                        logger.info(
-                            f"[trade chain] stage=duplicate_check "
-                            f"symbol={keyword} underlying_asset={underlying_asset} "
-                            f"action={decision['action']} "
-                            f"has_open_exposure={duplicate_exposure_open} "
-                            f"last_trade_action={last_trade_action}"
-                        )
-                        if duplicate_exposure_open:
-                            logger.info(
-                                f"[trade chain] stage=blocked_by_duplicate_trade "
-                                f"action={decision['action']} "
-                                f"reason=open_same_underlying_direction_exposure "
-                                f"underlying_asset={underlying_asset}"
-                            )
-                            logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
-                            opened_position = None
-                        elif market_confirmation["confirmed"]:
-                            symbol = keyword
-                            state_confirm = confirm_market_state_for_execution(
-                                decision["action"],
-                                market_state,
-                            )
-                            logger.info(
-                                f"[trade chain] stage=after_market_state_execution_filter "
-                                f"action={decision['action']} "
-                                f"confirmed={state_confirm['confirmed']} "
-                                f"score={state_confirm['score']} "
-                                f"reason={state_confirm['reason']} "
-                                f"market_bias={market_state.get('market_bias')} "
-                                f"confirmation_count={market_state.get('confirmation_count')}"
-                            )
-                            if not state_confirm["confirmed"]:
-                                logger.info(
-                                    f"[trade chain] stage=blocked_by_market_state "
-                                    f"action={decision['action']} reason={state_confirm['reason']}"
-                                )
-                                opened_position = None
-                            else:
-                                long_quality = confirm_long_quality_for_execution(
-                                    decision["action"],
-                                    market_state,
-                                )
-                                logger.info(
-                                    f"[trade chain] stage=after_long_quality_filter "
-                                    f"action={decision['action']} "
-                                    f"confirmed={long_quality['confirmed']} "
-                                    f"score={long_quality['score']} "
-                                    f"reason={long_quality['reason']} "
-                                    f"market_bias={market_state.get('market_bias')} "
-                                    f"confirmation_count={market_state.get('confirmation_count')} "
-                                    f"breakout={market_state.get('breakout')} "
-                                    f"bb_position={market_state.get('bb_position')}"
-                                )
-                                if not long_quality["confirmed"]:
-                                    logger.info(
-                                        f"[trade chain] stage=blocked_by_long_quality "
-                                        f"action={decision['action']} reason={long_quality['reason']}"
-                                    )
-                                    opened_position = None
-                                else:
-                                    price_snapshot = {
-                                        "current_price": market_price,
-                                        "previous_price": previous_price
-                                    }
-                                    logger.info(
-                                        f"[trade chain] stage=before_market_core "
-                                        f"action={decision['action']} price={market_price} "
-                                        f"previous_price={previous_price}"
-                                    )
-                                    core_confirm = confirm_market_core(decision["action"], price_snapshot)
-                                    logger.info(
-                                        f"[trade chain] stage=after_market_core "
-                                        f"action={decision['action']} "
-                                        f"confirmed={core_confirm['confirmed']} "
-                                        f"score={core_confirm['score']} reason={core_confirm['reason']}"
-                                    )
-                                    logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
-                                    if not core_confirm["confirmed"]:
-                                        logger.info(
-                                            f"[trade chain] stage=blocked_by_market_core "
-                                            f"action={decision['action']} reason={core_confirm['reason']}"
-                                        )
-                                        continue
-
-                                    logger.info(
-                                        f"[trade chain] stage=before_execute_virtual_trade "
-                                        f"action={decision['action']} size={trade_size} "
-                                        f"price={market_price} confidence={decision['confidence']}"
-                                    )
-                                    opened_position = execute_virtual_trade(
-                                        decision,
-                                        market_price,
-                                        keyword,
-                                        size_override=trade_size,
-                                        metadata={
-                                            "confidence": decision["confidence"],
-                                            "alpha_score": alpha["alpha_score"],
-                                            "signal_score": signal["score"],
-                                            "narrative": narrative["narrative"],
-                                            "action": decision["action"],
-                                            "original_action": direction_adjustment["original_action"],
-                                            "direction_adjust_reason": direction_adjustment["reason"],
-                                            "underlying_asset": underlying_asset,
-                                            "market_bias": market_state.get("market_bias"),
-                                            "market_score": market_state.get("score"),
-                                            "orderbook_imbalance": market_state.get("orderbook_imbalance"),
-                                            "volume_ratio_1m": market_state.get("volume_ratio_1m"),
-                                            "bb_position": market_state.get("bb_position"),
-                                            "breakout": market_state.get("breakout"),
-                                            "bullish_count": market_state.get("bullish_count"),
-                                            "bearish_count": market_state.get("bearish_count"),
-                                            "confirmation_count": market_state.get("confirmation_count"),
-                                            "bullish_reasons": market_state.get("bullish_reasons"),
-                                            "bearish_reasons": market_state.get("bearish_reasons"),
-                                            "market_candidate_action": market_candidate.get("action"),
-                                            "market_candidate_confidence": market_candidate.get("confidence"),
-                                            "market_candidate_reason": market_candidate.get("reason"),
-                                        },
-                                    )
-                                    logger.info(
-                                        f"[trade chain] stage=after_execute_virtual_trade "
-                                        f"action={decision['action']} result={opened_position}"
-                                    )
-                        else:
-                            logger.info(
-                                f"[trade chain] stage=blocked_by_market_confirm "
-                                f"action={decision['action']} "
-                                f"reason={market_confirmation['reason']}"
-                            )
-                            opened_position = None
-                        if opened_position:
-                            last_trade_action = decision["action"]
-                            logger.info(
-                                f"[trade opened] action: {decision['action']} "
-                                f"confidence: {decision['confidence']} "
-                                f"alpha: {alpha['alpha_score']}"
-                            )
-                            mark_trade_opened(keyword)
-                            try:
-                                await app.bot.send_message(
-                                    chat_id=chat_id,
-                                    text=(
-                                        "🚀 Hermes paper trade opened\n"
-                                        f"action: {str(decision.get('action')).upper()}\n"
-                                        f"symbol: {keyword}\n"
-                                        f"underlying: {opened_position.get('underlying_asset') or underlying_asset}\n"
-                                        f"entry: {opened_position.get('entry_price')}\n"
-                                        f"size: {opened_position.get('size')}\n"
-                                        f"confidence: {decision.get('confidence')}\n"
-                                        f"bias: {market_state.get('market_bias')}\n"
-                                        f"score: {market_state.get('score')}\n"
-                                        f"cc: {market_state.get('confirmation_count')}\n"
-                                        f"breakout: {market_state.get('breakout')}\n"
-                                        f"bb: {market_state.get('bb_position')}\n"
-                                        f"reason: {direction_adjustment.get('reason')}"
-                                    )
-                                )
-                            except Exception as notify_error:
-                                logger.error(f"[telegram notify error] trade_opened {notify_error}")
-                    else:
-                        logger.info(
-                            f"[trade chain] stage=blocked_by_confidence "
-                            f"action={decision['action']} confidence={decision['confidence']} "
-                            f"size={trade_size} symbol={keyword}"
-                        )
-                update_positions(market_price, keyword)
-                candidate_events = evaluate_market_candidates(
-                    datetime.utcnow().isoformat(),
-                    "BTCUSDT",
-                    market_price,
-                )
-                for event in candidate_events:
-                    logger.info(
-                        f"[market candidate result] horizon={event['horizon']} "
-                        f"action={event['action']} win={event['win']} "
-                        f"pnl_pct={event['pnl_pct']:.6f} "
-                        f"entry={event['entry_price']} current={event['current_price']} "
-                        f"confidence={event['confidence']} bias={event['market_bias']} "
-                        f"score={event['market_score']} reason={event['reason']}"
-                    )
-                    stats = get_market_candidate_stats()
-                    event_stats = stats.get(event["horizon"], {}).get(event["action"], {})
-                    logger.info(
-                        f"[market candidate stats] horizon={event['horizon']} "
-                        f"action={event['action']} count={event_stats.get('count', 0)} "
-                        f"wins={event_stats.get('wins', 0)} "
-                        f"losses={event_stats.get('losses', 0)} "
-                        f"win_rate={event_stats.get('win_rate', 0):.4f} "
-                        f"avg_pnl_pct={event_stats.get('avg_pnl_pct', 0):.6f}"
-                    )
-                    edge = get_best_market_candidate_edge()
-                    logger.info(
-                        f"[market candidate edge] horizon={edge['horizon']} "
-                        f"action={edge['action']} count={edge['count']} "
-                        f"win_rate={edge['win_rate']:.4f} "
-                        f"avg_pnl_pct={edge['avg_pnl_pct']:.6f} "
-                        f"estimated_cost_pct={edge['estimated_cost_pct']:.6f} "
-                        f"net_avg_pnl_pct={edge['net_avg_pnl_pct']:.6f} "
-                        f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
-                    )
-            else:
-                logger.info(
-                    f"[trade chain] stage=blocked_by_invalid_price "
-                    f"symbol={keyword} price={market_price}"
-                )
-                logger.info("invalid price, skip trading")
+            evaluate_decisions(market_price)
+            if await process_trade_cycle(
+                keyword,
+                chat_id,
+                decision,
+                market_price,
+                price_snapshot,
+                market_state,
+                market_candidate,
+                direction_adjustment,
+                signal,
+                alpha,
+                narrative,
+            ):
+                continue
             decision_prefix = (
                 f"[decision: {decision['action'].upper()} | "
                 f"confidence: {decision['confidence']} | "
@@ -934,266 +752,28 @@ content:
             except Exception as e:
                 logger.error(f"[tg debug error] {e}")
 
-            price = extract_price_from_text(answer)
+            price = extract_price_from_text(answer) or market_price
             record_decision(
                 datetime.utcnow().isoformat(),
                 {**decision, "narrative": narrative["narrative"]},
                 price,
                 name,
             )
-            evaluate_decisions()
-            if market_price is not None and 30000 <= market_price <= 150000:
-                previous_price = price_snapshot.get("previous_price")
-                previous_market_prices[name] = market_price
-                trade_size = None
-                if decision["action"] not in ("long", "short"):
-                    logger.info(
-                        f"[trade chain] stage=blocked_by_non_tradeable_action "
-                        f"action={decision['action']} symbol={name}"
-                    )
-                    logger.info(f"[trade skip] action={decision['action']} reason=not tradeable")
-                else:
-                    if decision["confidence"] >= 80:
-                        trade_size = 10
-                    elif decision["confidence"] >= 70:
-                        trade_size = 3
-
-                    if trade_size is not None:
-                        logger.info(
-                            f"[trade sizing] confidence: {decision['confidence']} "
-                            f"size: {trade_size}"
-                        )
-                        logger.info(
-                            f"[trade chain] stage=before_market_confirm "
-                            f"action={decision['action']} confidence={decision['confidence']} "
-                            f"size={trade_size} symbol={name} price={market_price}"
-                        )
-                        market_confirmation = confirm_market_trade(
-                            decision["action"],
-                            market_price,
-                            previous_price,
-                        )
-                        logger.info(
-                            f"[trade chain] stage=after_market_confirm "
-                            f"action={decision['action']} "
-                            f"confirmed={market_confirmation['confirmed']} "
-                            f"score={market_confirmation['market_score']} "
-                            f"reason={market_confirmation['reason']}"
-                        )
-                        logger.info(
-                            f"[market confirm] action={decision['action']} "
-                            f"confirmed={market_confirmation['confirmed']} "
-                            f"score={market_confirmation['market_score']} "
-                            f"reason={market_confirmation['reason']}"
-                        )
-                        underlying_asset = "BTCUSDT"
-                        duplicate_exposure_open = has_open_exposure(underlying_asset, decision["action"])
-                        logger.info(
-                            f"[trade chain] stage=duplicate_check "
-                            f"symbol={name} underlying_asset={underlying_asset} "
-                            f"action={decision['action']} "
-                            f"has_open_exposure={duplicate_exposure_open} "
-                            f"last_trade_action={last_trade_action}"
-                        )
-                        if duplicate_exposure_open:
-                            logger.info(
-                                f"[trade chain] stage=blocked_by_duplicate_trade "
-                                f"action={decision['action']} "
-                                f"reason=open_same_underlying_direction_exposure "
-                                f"underlying_asset={underlying_asset}"
-                            )
-                            logger.info(f"[trade filter] duplicate direction blocked: {decision['action']}")
-                            opened_position = None
-                        elif market_confirmation["confirmed"]:
-                            symbol = name
-                            state_confirm = confirm_market_state_for_execution(
-                                decision["action"],
-                                market_state,
-                            )
-                            logger.info(
-                                f"[trade chain] stage=after_market_state_execution_filter "
-                                f"action={decision['action']} "
-                                f"confirmed={state_confirm['confirmed']} "
-                                f"score={state_confirm['score']} "
-                                f"reason={state_confirm['reason']} "
-                                f"market_bias={market_state.get('market_bias')} "
-                                f"confirmation_count={market_state.get('confirmation_count')}"
-                            )
-                            if not state_confirm["confirmed"]:
-                                logger.info(
-                                    f"[trade chain] stage=blocked_by_market_state "
-                                    f"action={decision['action']} reason={state_confirm['reason']}"
-                                )
-                                opened_position = None
-                            else:
-                                long_quality = confirm_long_quality_for_execution(
-                                    decision["action"],
-                                    market_state,
-                                )
-                                logger.info(
-                                    f"[trade chain] stage=after_long_quality_filter "
-                                    f"action={decision['action']} "
-                                    f"confirmed={long_quality['confirmed']} "
-                                    f"score={long_quality['score']} "
-                                    f"reason={long_quality['reason']} "
-                                    f"market_bias={market_state.get('market_bias')} "
-                                    f"confirmation_count={market_state.get('confirmation_count')} "
-                                    f"breakout={market_state.get('breakout')} "
-                                    f"bb_position={market_state.get('bb_position')}"
-                                )
-                                if not long_quality["confirmed"]:
-                                    logger.info(
-                                        f"[trade chain] stage=blocked_by_long_quality "
-                                        f"action={decision['action']} reason={long_quality['reason']}"
-                                    )
-                                    opened_position = None
-                                else:
-                                    price_snapshot = {
-                                        "current_price": market_price,
-                                        "previous_price": previous_price
-                                    }
-                                    logger.info(
-                                        f"[trade chain] stage=before_market_core "
-                                        f"action={decision['action']} price={market_price} "
-                                        f"previous_price={previous_price}"
-                                    )
-                                    core_confirm = confirm_market_core(decision["action"], price_snapshot)
-                                    logger.info(
-                                        f"[trade chain] stage=after_market_core "
-                                        f"action={decision['action']} "
-                                        f"confirmed={core_confirm['confirmed']} "
-                                        f"score={core_confirm['score']} reason={core_confirm['reason']}"
-                                    )
-                                    logger.info(f"[market core] action={decision['action']} confirmed={core_confirm['confirmed']} score={core_confirm['score']} reason={core_confirm['reason']}")
-                                    if not core_confirm["confirmed"]:
-                                        logger.info(
-                                            f"[trade chain] stage=blocked_by_market_core "
-                                            f"action={decision['action']} reason={core_confirm['reason']}"
-                                        )
-                                        continue
-
-                                    logger.info(
-                                        f"[trade chain] stage=before_execute_virtual_trade "
-                                        f"action={decision['action']} size={trade_size} "
-                                        f"price={market_price} confidence={decision['confidence']}"
-                                    )
-                                    opened_position = execute_virtual_trade(
-                                        decision,
-                                        market_price,
-                                        name,
-                                        size_override=trade_size,
-                                        metadata={
-                                            "confidence": decision["confidence"],
-                                            "alpha_score": alpha["alpha_score"],
-                                            "signal_score": signal["score"],
-                                            "narrative": narrative["narrative"],
-                                            "action": decision["action"],
-                                            "original_action": direction_adjustment["original_action"],
-                                            "direction_adjust_reason": direction_adjustment["reason"],
-                                            "underlying_asset": underlying_asset,
-                                            "market_bias": market_state.get("market_bias"),
-                                            "market_score": market_state.get("score"),
-                                            "orderbook_imbalance": market_state.get("orderbook_imbalance"),
-                                            "volume_ratio_1m": market_state.get("volume_ratio_1m"),
-                                            "bb_position": market_state.get("bb_position"),
-                                            "breakout": market_state.get("breakout"),
-                                            "bullish_count": market_state.get("bullish_count"),
-                                            "bearish_count": market_state.get("bearish_count"),
-                                            "confirmation_count": market_state.get("confirmation_count"),
-                                            "bullish_reasons": market_state.get("bullish_reasons"),
-                                            "bearish_reasons": market_state.get("bearish_reasons"),
-                                            "market_candidate_action": market_candidate.get("action"),
-                                            "market_candidate_confidence": market_candidate.get("confidence"),
-                                            "market_candidate_reason": market_candidate.get("reason"),
-                                        },
-                                    )
-                                    logger.info(
-                                        f"[trade chain] stage=after_execute_virtual_trade "
-                                        f"action={decision['action']} result={opened_position}"
-                                    )
-                        else:
-                            logger.info(
-                                f"[trade chain] stage=blocked_by_market_confirm "
-                                f"action={decision['action']} "
-                                f"reason={market_confirmation['reason']}"
-                            )
-                            opened_position = None
-                        if opened_position:
-                            last_trade_action = decision["action"]
-                            logger.info(
-                                f"[trade opened] action: {decision['action']} "
-                                f"confidence: {decision['confidence']} "
-                                f"alpha: {alpha['alpha_score']}"
-                            )
-                            mark_trade_opened(name)
-                            try:
-                                await app.bot.send_message(
-                                    chat_id=chat_id,
-                                    text=(
-                                        "🚀 Hermes paper trade opened\n"
-                                        f"action: {str(decision.get('action')).upper()}\n"
-                                        f"symbol: {name}\n"
-                                        f"underlying: {opened_position.get('underlying_asset') or underlying_asset}\n"
-                                        f"entry: {opened_position.get('entry_price')}\n"
-                                        f"size: {opened_position.get('size')}\n"
-                                        f"confidence: {decision.get('confidence')}\n"
-                                        f"bias: {market_state.get('market_bias')}\n"
-                                        f"score: {market_state.get('score')}\n"
-                                        f"cc: {market_state.get('confirmation_count')}\n"
-                                        f"breakout: {market_state.get('breakout')}\n"
-                                        f"bb: {market_state.get('bb_position')}\n"
-                                        f"reason: {direction_adjustment.get('reason')}"
-                                    )
-                                )
-                            except Exception as notify_error:
-                                logger.error(f"[telegram notify error] trade_opened {notify_error}")
-                    else:
-                        logger.info(
-                            f"[trade chain] stage=blocked_by_confidence "
-                            f"action={decision['action']} confidence={decision['confidence']} "
-                            f"size={trade_size} symbol={name}"
-                        )
-                update_positions(market_price, name)
-                candidate_events = evaluate_market_candidates(
-                    datetime.utcnow().isoformat(),
-                    "BTCUSDT",
-                    market_price,
-                )
-                for event in candidate_events:
-                    logger.info(
-                        f"[market candidate result] horizon={event['horizon']} "
-                        f"action={event['action']} win={event['win']} "
-                        f"pnl_pct={event['pnl_pct']:.6f} "
-                        f"entry={event['entry_price']} current={event['current_price']} "
-                        f"confidence={event['confidence']} bias={event['market_bias']} "
-                        f"score={event['market_score']} reason={event['reason']}"
-                    )
-                    stats = get_market_candidate_stats()
-                    event_stats = stats.get(event["horizon"], {}).get(event["action"], {})
-                    logger.info(
-                        f"[market candidate stats] horizon={event['horizon']} "
-                        f"action={event['action']} count={event_stats.get('count', 0)} "
-                        f"wins={event_stats.get('wins', 0)} "
-                        f"losses={event_stats.get('losses', 0)} "
-                        f"win_rate={event_stats.get('win_rate', 0):.4f} "
-                        f"avg_pnl_pct={event_stats.get('avg_pnl_pct', 0):.6f}"
-                    )
-                    edge = get_best_market_candidate_edge()
-                    logger.info(
-                        f"[market candidate edge] horizon={edge['horizon']} "
-                        f"action={edge['action']} count={edge['count']} "
-                        f"win_rate={edge['win_rate']:.4f} "
-                        f"avg_pnl_pct={edge['avg_pnl_pct']:.6f} "
-                        f"estimated_cost_pct={edge['estimated_cost_pct']:.6f} "
-                        f"net_avg_pnl_pct={edge['net_avg_pnl_pct']:.6f} "
-                        f"edge_score={edge['edge_score']:.8f} reason={edge['reason']}"
-                    )
-            else:
-                logger.info(
-                    f"[trade chain] stage=blocked_by_invalid_price "
-                    f"symbol={name} price={market_price}"
-                )
-                logger.info("invalid price, skip trading")
+            evaluate_decisions(market_price)
+            if await process_trade_cycle(
+                name,
+                chat_id,
+                decision,
+                market_price,
+                price_snapshot,
+                market_state,
+                market_candidate,
+                direction_adjustment,
+                signal,
+                alpha,
+                narrative,
+            ):
+                continue
             decision_prefix = (
                 f"[decision: {decision['action'].upper()} | "
                 f"confidence: {decision['confidence']} | "
@@ -1263,6 +843,7 @@ async def run_bot():
         await app.initialize()
         await app.start()
         await restore_autonomous_tasks(app)
+        asyncio.create_task(daily_report_loop(app.bot))
         await app.updater.start_polling()
         await asyncio.Event().wait()
     except Conflict:

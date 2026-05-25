@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime
 
 from loguru import logger
 
@@ -79,7 +80,17 @@ def extract_price_from_text(text):
     candidates.sort(key=lambda item: item[0])
     return candidates[0][1]
 
-    return None
+
+def _decision_age_seconds(decision) -> float:
+    """决策距今秒数，用于延迟评估避免同价误判。"""
+    ts = decision.get("timestamp")
+    if not ts:
+        return 9999.0
+    try:
+        opened = datetime.fromisoformat(str(ts).replace("Z", ""))
+        return (datetime.utcnow() - opened).total_seconds()
+    except (TypeError, ValueError):
+        return 9999.0
 
 
 def record_decision(timestamp, decision, price_at_decision, symbol):
@@ -174,7 +185,12 @@ def evaluate_outcome(decision, current_price):
     }
 
 
-def evaluate_decisions():
+def evaluate_decisions(current_price=None):
+    from intel.market_price import get_btc_price
+
+    if current_price is None:
+        current_price = get_btc_price()
+
     decisions = _load_decisions()
     evaluations = []
     changed = False
@@ -186,7 +202,9 @@ def evaluate_decisions():
         if decision.get("price") is None:
             continue
 
-        current_price = decision.get("current_price")
+        if _decision_age_seconds(decision) < 60:
+            continue
+
         if current_price is None:
             continue
 

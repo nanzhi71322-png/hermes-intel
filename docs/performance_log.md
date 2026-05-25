@@ -75,6 +75,43 @@
 
 ---
 
+## 2026-05-26 — 阶段 P3/P4/P5：多策略对比 + 自动调参 + 运行状态检查
+
+**动作**
+- 新增 4 套策略：`market_structure` / `momentum_breakout` / `hybrid_alpha` / `mean_reversion`
+- 新增 `scripts/run_strategy_compare.py`（同数据横向对比 + Top2 自动 Optuna 调参）
+- 新增 `scripts/check_runtime_status.py`（本地数据/回测/远程 bot 状态）
+- 修复 `feedback_engine`：决策价 fallback 到 market_price；评估延迟 60s 避免同价误判
+
+**策略对比排名（BTC/USDT 5m × 2016 bars，刚拉最新数据）**
+
+| 排名 | 策略 | 交易 | 胜率 | 收益 | 回撤 | 调参 |
+|------|------|------|------|------|------|------|
+| 1 | 市场结构 | 14 | 35.7% | **-0.02%** | 0.19% | 是 |
+| 2 | 动量突破 | 56 | 21.4% | -1.34% | 1.34% | 是 |
+| 3 | 混合(结构+动量) | 32 | 25.0% | -0.69% | 0.70% | 否 |
+| 4 | 均值回归 | 17 | 23.5% | -0.41% | 0.49% | 否 |
+
+**最优参数（market_structure 调参后）**
+- TP=2.22%, SL=2.84%, TTL=30 bars, min_score=81, min_confirmation=2
+- 已写入 `data/backtest/best_strategy.json`
+
+**运行状态**
+- 远程 `hermes-bot`：**active**（正在跑，日志 01:39 有 agent_loop 输出）
+- TRADING_MODE=live, TRADING_TESTNET=true（testnet 模式）
+- 本地无 paper_portfolio / feedback 文件（数据在服务器 `/opt/hermes`）
+
+**结论**
+- 调参后市场结构策略**接近盈亏平衡**（-0.02%），优于其他策略
+- 下一步：将最优参数同步到 live 模拟盘，并加入情绪信号增强
+
+**下一步**
+- 同步 best_strategy 参数到 paper_trading / pipeline
+- 服务器上拉 feedback 统计验证 live 表现
+- 继续迭代 hybrid 策略（结构+动量+叙事权重）
+
+---
+
 ## 模板（后续条目复制此格式）
 
 ```
