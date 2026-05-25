@@ -112,6 +112,42 @@
 
 ---
 
+## 2026-05-26 — 自动迭代引擎上线（并行多策略 + 进化筛选）
+
+**动作**
+- 新增 `backtest/parallel_runner.py` — 6-8 路并行回测，无需等 live 时间
+- 新增 `backtest/evolve.py` — 优胜者参数变异，生成下一代候选
+- 新增 `backtest/iterate.py` + `scripts/run_auto_iterate.py` — 多代循环筛选
+- **已启动后台持续迭代**（每 15 分钟 5 代 × ~20 候选）
+
+**工作流**
+```
+种子池(4策略×3周期+变异) → 并行回测 → 排名 → Top3变异 → 下一代 → 重复
+                                              ↓
+                              iterate_history.jsonl + best_strategy.json
+```
+
+**首轮 3 代结果（~50 秒，21→12 候选/代）**
+
+| 代数 | 最优策略 | 收益 | 胜率 | 得分 |
+|------|----------|------|------|------|
+| 1 | hybrid_alpha | -0.15% | 38.5% | -9.13 |
+| 2 | hybrid_alpha（变异） | **-0.12%** | 30.8% | **-6.44** |
+| 3 | hybrid_alpha | -0.12% | 30.8% | -6.44 |
+
+**结论**：并行迭代比等 live 快 100x+；混合策略（结构+动量）持续领先
+
+**命令**
+```bash
+# 单次迭代
+python scripts/run_auto_iterate.py --generations 5 --workers 8
+
+# 持续自动迭代（已在后台运行）
+python scripts/run_auto_iterate.py --continuous --sleep-minutes 15
+```
+
+---
+
 ## 模板（后续条目复制此格式）
 
 ```

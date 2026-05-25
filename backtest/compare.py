@@ -45,6 +45,14 @@ def run_single(
     cfg = config_override or spec.default_config
     engine = BacktestEngine(cfg, strategy_fn=spec.fn, strategy_name=spec.name)
     result = engine.run(df=df)
+    params = best_params or {
+        "take_profit_pct": cfg.take_profit_pct,
+        "stop_loss_pct": cfg.stop_loss_pct,
+        "position_ttl_bars": cfg.position_ttl_bars,
+        "min_score": cfg.min_score,
+        "min_confirmation": cfg.min_confirmation,
+        "timeframe": cfg.timeframe,
+    }
     return CompareRow(
         strategy=spec.name,
         label=spec.label,
@@ -53,7 +61,7 @@ def run_single(
         metrics=result.metrics,
         score=_score(result.metrics),
         tuned=tuned,
-        best_params=best_params,
+        best_params=params,
     )
 
 
