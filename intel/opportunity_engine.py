@@ -1,3 +1,4 @@
+import os
 import time
 
 from loguru import logger
@@ -42,7 +43,8 @@ def _price_momentum(symbol, current_price):
 
     momentum = current_price - previous_price
     direction = "up" if momentum > 0 else "down"
-    logger.info(f"[momentum] value: {momentum:.2f} direction: {direction}")
+    if not os.getenv("HERMES_BACKTEST"):
+        logger.info(f"[momentum] value: {momentum:.2f} direction: {direction}")
 
     return momentum
 

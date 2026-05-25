@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -59,6 +60,7 @@ class BacktestEngine:
             )
 
         enriched = enrich_dataframe(df)
+        os.environ["HERMES_BACKTEST"] = "1"
         portfolio = BacktestPortfolio(balance=cfg.starting_balance, max_positions=cfg.max_open_positions)
         prev_close: Optional[float] = None
 
