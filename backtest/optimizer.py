@@ -66,8 +66,9 @@ def optuna_search(
 
     def objective(trial: optuna.Trial) -> float:
         params = {
-            "take_profit_pct": trial.suggest_float("take_profit_pct", 0.005, 0.02),
-            "stop_loss_pct": trial.suggest_float("stop_loss_pct", 0.005, 0.02),
+            "take_profit_pct": trial.suggest_float("take_profit_pct", 0.005, 0.03),
+            "stop_loss_pct": trial.suggest_float("stop_loss_pct", 0.005, 0.03),
+            "position_ttl_bars": trial.suggest_int("position_ttl_bars", 3, 30),
             "min_score": trial.suggest_int("min_score", 70, 90),
             "min_confirmation": trial.suggest_int("min_confirmation", 2, 4),
         }
