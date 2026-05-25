@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from backtest.config import BacktestConfig
-from backtest.strategies import hybrid, market, momentum, reversion, sentiment_hybrid, sentiment_proxy
+from backtest.strategies import adaptive, hybrid, market, momentum, reversion, sentiment_hybrid, sentiment_proxy
 from backtest.strategies.base import Signal
 
 
@@ -95,6 +95,18 @@ STRATEGIES: dict[str, StrategySpec] = {
             stop_loss_pct=0.011,
             position_ttl_bars=22,
             extra={"min_confidence": 72},
+        ),
+    ),
+    "adaptive_regime": StrategySpec(
+        name="adaptive_regime",
+        label="自适应(牛/震/熊)",
+        fn=adaptive.generate_signal,
+        default_config=_cfg(
+            timeframe="5m",
+            take_profit_pct=0.015,
+            stop_loss_pct=0.012,
+            position_ttl_bars=20,
+            extra={"regime_profiles": None},
         ),
     ),
 }

@@ -14,6 +14,8 @@ data/backtest/*.csv
 data/backtest/results/
 data/backtest/iterate_history.jsonl
 data/backtest/best_strategy.json
+data/backtest/regime_best.json
+data/backtest/regime_iterate_history.jsonl
 data/paper_portfolio.json
 data/live_portfolio.json
 data/live_orders.jsonl

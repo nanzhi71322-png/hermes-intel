@@ -12,6 +12,7 @@ from loguru import logger
 from backtest.config import BacktestConfig
 from backtest.data_loader import load_or_fetch
 from backtest.indicators import enrich_dataframe
+from backtest.regime import enrich_regime
 from backtest.market_strategy import generate_signal as default_signal
 from backtest.metrics import PerformanceMetrics, compute_metrics
 from backtest.portfolio import BacktestPortfolio
@@ -59,7 +60,7 @@ class BacktestEngine:
                 refresh=refresh_data,
             )
 
-        enriched = enrich_dataframe(df)
+        enriched = enrich_regime(enrich_dataframe(df))
         os.environ["HERMES_BACKTEST"] = "1"
         portfolio = BacktestPortfolio(balance=cfg.starting_balance, max_positions=cfg.max_open_positions)
         prev_close: Optional[float] = None
