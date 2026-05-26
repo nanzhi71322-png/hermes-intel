@@ -14,6 +14,7 @@ from backtest.compare import CompareRow, rows_to_dict
 from backtest.config_utils import clone_config
 from backtest.evolve import build_seed_pool, evolve_next_generation
 from backtest.parallel_runner import dedupe_candidates, run_parallel
+from backtest.gate import check_metrics, is_better_candidate, iteration_score, metrics_from_any
 from backtest.strategies.registry import get_strategy
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -111,14 +112,17 @@ def save_generation(summary: IterateSummary) -> None:
         if hasattr(cfg, key):
             setattr(cfg, key, val)
 
-    current_score = None
+    old_payload = None
     if BEST_FILE.exists():
         try:
-            current_score = json.loads(BEST_FILE.read_text(encoding="utf-8")).get("score")
+            old_payload = json.loads(BEST_FILE.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            current_score = None
+            old_payload = None
 
-    if current_score is None or best_row.score >= float(current_score):
+    metrics_dict = metrics_from_any(best_row.metrics)
+    iter_score = iteration_score(metrics_dict)
+    if is_better_candidate(best_row.metrics, iter_score, old_payload):
+        gate = check_metrics(metrics_dict)
         payload = {
             "updated_at": ts,
             "generation": summary.generation,
@@ -126,12 +130,15 @@ def save_generation(summary: IterateSummary) -> None:
             "label": spec.label,
             "timeframe": best_row.timeframe,
             "score": best_row.score,
+            "iteration_score": iter_score,
+            "gate_passed": gate.passed,
+            "gate_failures": gate.failures,
             "params": params,
             "applied_config": cfg.to_dict(),
-            "metrics": best_row.metrics.__dict__,
+            "metrics": metrics_dict,
         }
         BEST_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        logger.info(f"更新最优策略 score={best_row.score:.2f}")
+        logger.info(f"更新最优策略 iter_score={iter_score:.2f} gate={gate.passed}")
 
 
 def run_auto_iterate(

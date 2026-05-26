@@ -43,7 +43,7 @@ def main() -> None:
     parser.add_argument("--max-rounds", type=int, default=3, help="最多连续迭代轮数")
     parser.add_argument("--generations", type=int, default=8)
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--limit", type=int, default=5000)
+    parser.add_argument("--limit", type=int, default=8640, help="K线条数，8640≈30天5m")
     args = parser.parse_args()
 
     all_strategies = list_strategies()

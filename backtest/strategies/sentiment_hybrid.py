@@ -12,17 +12,32 @@ from backtest.strategies import market, sentiment_proxy
 def generate_signal(
     row: dict, bar_index: int, config: BacktestConfig, history: dict | None = None
 ) -> Optional[Signal]:
-    """两套逻辑同时出 long/short 才入场。"""
+    """strict: 情绪+结构同向；soft: 高置信情绪可单独入场。"""
     sent = sentiment_proxy.generate_signal(row, bar_index, config, history)
     struct = market.generate_signal(row, bar_index, config, history)
-    if not sent or not struct:
+    mode = str(config.extra.get("dual_mode", "strict"))
+
+    if sent and struct and sent.action == struct.action:
+        return Signal(
+            sent.action,
+            min(95, sent.confidence + 3),
+            f"sentiment+structure: {sent.reason}",
+            bar_index,
+            sent.price,
+        )
+
+    if mode != "soft" or not sent:
         return None
-    if sent.action != struct.action:
+
+    soft_min = int(config.extra.get("soft_min_confidence", 78))
+    if int(sent.confidence) < soft_min:
+        return None
+    if struct is not None and struct.action != sent.action:
         return None
     return Signal(
         sent.action,
-        min(95, sent.confidence + 3),
-        f"sentiment+structure: {sent.reason}",
+        sent.confidence,
+        f"sentiment-soft: {sent.reason}",
         bar_index,
         sent.price,
     )

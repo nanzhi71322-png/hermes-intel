@@ -10,6 +10,7 @@ from loguru import logger
 
 from backtest.config import BacktestConfig
 from backtest.engine import BacktestEngine
+from backtest.gate import iteration_score
 
 
 @dataclass
@@ -89,14 +90,8 @@ def optuna_search(
 
 
 def _default_score(metrics) -> float:
-    """综合评分：收益 - 回撤惩罚 + 夏普奖励。"""
-    if metrics.total_trades < 5:
-        return -999.0
-    return (
-        metrics.total_return_pct
-        - metrics.max_drawdown_pct * 0.5
-        + metrics.sharpe_ratio * 2
-    )
+    """综合评分 — 与 gate 晋级门槛对齐。"""
+    return iteration_score(metrics)
 
 
 def _apply_params(base: BacktestConfig, params: dict[str, Any]) -> BacktestConfig:

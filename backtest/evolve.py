@@ -36,7 +36,24 @@ def mutate_candidate(
         "min_score": _mutate_int(base.min_score, 65, 90, 3, rng),
         "min_confirmation": _mutate_int(base.min_confirmation, 2, 4, 1, rng),
     }
-    cfg = clone_config(base, **params)
+    extra_overrides: dict[str, Any] = {}
+    if parent.strategy in ("sentiment_hybrid", "sentiment_proxy"):
+        extra = dict(parent.config.extra or {})
+        extra["min_confidence"] = _mutate_int(
+            int(extra.get("min_confidence", 70)), 65, 88, 3, rng
+        )
+        if parent.strategy == "sentiment_hybrid":
+            extra["dual_mode"] = rng.choice(["strict", "soft", "soft"])
+            extra["soft_min_confidence"] = _mutate_int(
+                int(extra.get("soft_min_confidence", 78)), 72, 92, 2, rng
+            )
+        extra_overrides = extra
+
+    if extra_overrides:
+        cfg = clone_config(base, **params, extra=extra_overrides)
+        params = {**params, "extra": extra_overrides}
+    else:
+        cfg = clone_config(base, **params)
     cid = f"g{generation}-v{variant_idx}-{parent.strategy[:4]}"
     return StrategyCandidate(
         candidate_id=cid,

@@ -30,4 +30,7 @@ def config_key(cfg: BacktestConfig, strategy: str) -> str:
         f"ms{cfg.min_score}",
         f"mc{cfg.min_confirmation}",
     ]
+    if cfg.extra:
+        for key in sorted(cfg.extra.keys()):
+            parts.append(f"{key}={cfg.extra[key]}")
     return "|".join(parts)

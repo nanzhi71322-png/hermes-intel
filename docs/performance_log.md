@@ -160,3 +160,13 @@ python scripts/run_auto_iterate.py --continuous --sleep-minutes 15
 **结论**: ...
 **下一步**: ...
 ```
+
+---
+
+## 2026-05-27 — 迭代评分与 gate 对齐
+
+**动作**: `iteration_score` 与晋级门槛绑定；`sentiment_hybrid` 增加 soft 模式；新增 `run_gate_optimize.py`；修复 `is_better_candidate` 新旧评分不可比问题。
+
+**回测结果**（当前 `best_strategy.json`）: 14 笔 / 胜率 42.9% / 收益 -0.055% / 夏普 -1.33 — **未过 gate**
+
+**下一步**: 后台 Optuna + 多代并行迭代直至 `gate.py` 全部通过，再进入 P9 七天模拟盘验证。

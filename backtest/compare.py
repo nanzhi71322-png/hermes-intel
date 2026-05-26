@@ -12,7 +12,8 @@ from backtest.config import BacktestConfig
 from backtest.data_loader import load_or_fetch
 from backtest.engine import BacktestEngine, BacktestResult
 from backtest.metrics import PerformanceMetrics
-from backtest.optimizer import _default_score, optuna_search
+from backtest.gate import iteration_score
+from backtest.optimizer import optuna_search
 from backtest.strategies.registry import STRATEGIES, StrategySpec, get_strategy
 
 
@@ -31,7 +32,7 @@ class CompareRow:
 
 
 def _score(metrics: PerformanceMetrics) -> float:
-    return _default_score(metrics)
+    return iteration_score(metrics)
 
 
 def run_single(

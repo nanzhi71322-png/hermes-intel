@@ -94,7 +94,7 @@ STRATEGIES: dict[str, StrategySpec] = {
             take_profit_pct=0.014,
             stop_loss_pct=0.011,
             position_ttl_bars=22,
-            extra={"min_confidence": 72},
+            extra={"min_confidence": 72, "dual_mode": "strict", "soft_min_confidence": 80},
         ),
     ),
     "adaptive_regime": StrategySpec(

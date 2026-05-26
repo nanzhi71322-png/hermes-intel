@@ -15,7 +15,7 @@ from loguru import logger
 from backtest.config import BacktestConfig
 from backtest.config_utils import clone_config
 from backtest.data_loader import load_or_fetch
-from backtest.gate import check_metrics
+from backtest.gate import check_metrics, iteration_score
 from backtest.metrics import PerformanceMetrics
 from backtest.regime import enrich_regime, regime_bar_counts
 from backtest.regime_eval import RegimeBacktestReport, report_to_dict, run_regime_backtest
@@ -36,15 +36,15 @@ class RegimeIterateResult:
 
 
 def _score_report(report: RegimeBacktestReport) -> float:
-    """综合评分：整体收益 + 分状态均衡（避免只在一种行情里赚）。"""
+    """综合评分 — 以 gate 对齐的整体指标为主，分状态小幅加分。"""
     o = report.overall
-    if o.total_trades < 15:
-        return -999.0
-    base = o.total_return_pct - o.max_drawdown_pct * 0.4 + o.sharpe_ratio * 1.5
+    base = iteration_score(o)
+    if base < -500:
+        return base
     regime_bonus = 0.0
-    for name, m in report.by_regime.items():
-        if m.total_trades >= 3:
-            regime_bonus += m.total_return_pct * 0.3
+    for _name, m in report.by_regime.items():
+        if m.total_trades >= 3 and m.total_return_pct > 0:
+            regime_bonus += m.total_return_pct * 0.2
     return base + regime_bonus
 
 
