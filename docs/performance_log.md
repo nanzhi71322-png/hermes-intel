@@ -170,3 +170,16 @@ python scripts/run_auto_iterate.py --continuous --sleep-minutes 15
 **回测结果**（当前 `best_strategy.json`）: 14 笔 / 胜率 42.9% / 收益 -0.055% / 夏普 -1.33 — **未过 gate**
 
 **下一步**: 后台 Optuna + 多代并行迭代直至 `gate.py` 全部通过，再进入 P9 七天模拟盘验证。
+
+---
+
+## 2026-05-27（晚）— 恢复迭代
+
+**原因说明**: 此前多次后台任务被 Cursor/会话中断（深度扫描 ~47s 中止、暴力网格中止），未在本机常驻 2h 循环，故 `best_strategy.json` 自 5/25 起未刷新。
+
+**动作**:
+- 已写入 `deep_scan_history.jsonl` 一条记录（gate 仍 FAIL）
+- 正在跑 `run_gate_optimize.py --days 17 --trials 30 --refresh`
+- 新增 `scripts/write_status_snapshot.py` → `data/backtest/status_snapshot.json`
+
+**查看进展**: `python scripts/write_status_snapshot.py` 或读 `status_snapshot.json`
