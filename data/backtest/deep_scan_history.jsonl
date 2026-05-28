@@ -1,0 +1,1 @@
+{"timestamp": "2026-05-27T11:07:44.642539+00:00", "days": 17, "regime_score": -76.10610581162604, "regime_return_pct": -1.0474594837402265, "best_label": "情绪+结构(P5)[win-g3-0]", "best_return_pct": -0.05516026955517361, "best_win_rate": 42.857142857142854, "gate_passed": false, "gate_failures": ["收益未转正(-0.06%)", "胜率不足(42.9%<45%)", "夏普不足(-1.33<0.3)"]}

@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-05-28T16:05:15.247627+00:00",
+  "best_strategy": "sentiment_hybrid",
+  "best_updated_at": "2026-05-25T20:41:54.053006+00:00",
+  "metrics": {
+    "total_trades": 14,
+    "win_trades": 6,
+    "win_rate": 42.857142857142854,
+    "total_pnl": -0.055160269555186645,
+    "total_return_pct": -0.05516026955517361,
+    "avg_pnl": -0.003940019253941903,
+    "profit_factor": 0.8003242841051975,
+    "sharpe_ratio": -1.3348004217403613,
+    "max_drawdown_pct": 0.20663179647931398,
+    "avg_win": 0.03684816574128164,
+    "avg_loss": 0.034531158000359566,
+    "payoff_ratio": 1.0670990454735967
+  },
+  "gate_passed": false,
+  "gate_failures": [
+    "收益未转正(-0.06%)",
+    "胜率不足(42.9%<45%)",
+    "夏普不足(-1.33<0.3)"
+  ],
+  "last_deep_scan": {
+    "timestamp": "2026-05-27T11:07:44.642539+00:00",
+    "days": 17,
+    "regime_score": -76.10610581162604,
+    "regime_return_pct": -1.0474594837402265,
+    "best_label": "情绪+结构(P5)[win-g3-0]",
+    "best_return_pct": -0.05516026955517361,
+    "best_win_rate": 42.857142857142854,
+    "gate_passed": false,
+    "gate_failures": [
+      "收益未转正(-0.06%)",
+      "胜率不足(42.9%<45%)",
+      "夏普不足(-1.33<0.3)"
+    ]
+  }
+}

@@ -164,7 +164,7 @@ async def run_async_contract_checks():
     assert len(bot.messages) == 1
     assert bot.messages[0]["chat_id"] == 8414455056
     sent_text = bot.messages[0]["text"]
-    assert "Hermes paper trade opened" in sent_text
+    assert "Hermes PAPER trade opened" in sent_text
     assert "action: SHORT" in sent_text
     assert "underlying: BTCUSDT" in sent_text
     assert "entry: 77077.03" in sent_text

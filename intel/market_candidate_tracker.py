@@ -1,10 +1,14 @@
 from datetime import datetime
 from copy import deepcopy
+import json
+import os
 
 from loguru import logger
 
+from config.settings import BOT_HOME
 
 MAX_PENDING_CANDIDATES = 200
+STATS_FILE = os.path.join(BOT_HOME, "data", "candidate_stats.json")
 pending_candidates = []
 last_recorded_candidates = {}
 candidate_stats = {
@@ -12,6 +16,26 @@ candidate_stats = {
     "180s": {},
     "300s": {},
 }
+
+
+def _load_persisted_stats() -> None:
+    global candidate_stats
+    if not os.path.exists(STATS_FILE):
+        return
+    try:
+        with open(STATS_FILE, "r", encoding="utf-8") as handle:
+            candidate_stats = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        pass
+
+
+def _save_persisted_stats() -> None:
+    os.makedirs(os.path.dirname(STATS_FILE), exist_ok=True)
+    with open(STATS_FILE, "w", encoding="utf-8") as handle:
+        json.dump(candidate_stats, handle, ensure_ascii=True, indent=2)
+
+
+_load_persisted_stats()
 
 
 def _parse_timestamp(timestamp):
@@ -94,6 +118,7 @@ def _update_stats(horizon, action, pnl_pct, win):
     action_stats["total_pnl_pct"] += pnl_pct
     action_stats["avg_pnl_pct"] = action_stats["total_pnl_pct"] / action_stats["count"]
     action_stats["win_rate"] = action_stats["wins"] / action_stats["count"]
+    _save_persisted_stats()
 
 
 def get_market_candidate_stats():

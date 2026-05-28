@@ -5,6 +5,7 @@ def build_trade_opened_message(
     underlying_asset,
     market_state,
     direction_adjustment,
+    trading_mode="paper",
 ):
     decision = decision or {}
     opened_position = opened_position or {}
@@ -12,9 +13,10 @@ def build_trade_opened_message(
     direction_adjustment = direction_adjustment or {}
 
     action = str(decision.get("action", "")).upper()
+    mode_label = "PAPER" if trading_mode == "paper" else "LIVE"
 
     return (
-        "\U0001F680 Hermes paper trade opened\n"
+        f"\U0001F680 Hermes {mode_label} trade opened\n"
         f"action: {action}\n"
         f"symbol: {symbol}\n"
         f"underlying: {opened_position.get('underlying_asset') or underlying_asset}\n"
@@ -40,6 +42,7 @@ async def send_trade_opened_notification(
     market_state,
     direction_adjustment,
     logger,
+    trading_mode="paper",
 ):
     try:
         await bot.send_message(
@@ -51,6 +54,7 @@ async def send_trade_opened_notification(
                 underlying_asset,
                 market_state,
                 direction_adjustment,
+                trading_mode=trading_mode,
             ),
         )
     except Exception as notify_error:

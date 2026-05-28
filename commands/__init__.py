@@ -1,6 +1,6 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
-from commands import agent_commands, autonomous_commands, browser_commands, system_commands
+from commands import agent_commands, autonomous_commands, browser_commands, system_commands, trading_commands
 
 
 def register_handlers(
@@ -56,6 +56,12 @@ def register_handlers(
     app.add_handler(CommandHandler("type", browser_commands.type_cmd))
     app.add_handler(CommandHandler("press", browser_commands.press_cmd))
     app.add_handler(CommandHandler("typeactive", browser_commands.typeactive_cmd))
+
+    app.add_handler(CommandHandler("tradereport", trading_commands.tradereport))
+    app.add_handler(CommandHandler("tradestatus", trading_commands.tradestatus))
+    app.add_handler(CommandHandler("tradetest", trading_commands.tradetest))
+    app.add_handler(CommandHandler("tradepause", trading_commands.tradepause))
+    app.add_handler(CommandHandler("traderesume", trading_commands.traderesume))
 
     app.add_handler(
         MessageHandler(

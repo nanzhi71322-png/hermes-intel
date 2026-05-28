@@ -1,10 +1,13 @@
 from dotenv import load_dotenv
-load_dotenv()
 
 import os
 
 
 ENV_FILE = os.getenv("ENV_FILE", "/opt/hermes/.env")
+if os.path.exists(ENV_FILE):
+    load_dotenv(ENV_FILE, override=True)
+else:
+    load_dotenv(override=True)
 
 HERMES_HOME = os.getenv("HERMES_HOME", "/opt/hermes")
 BOT_HOME = os.getenv("BOT_HOME", "/opt/hermes/tg-bot")
@@ -42,9 +45,14 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 BOT_TOKEN = TELEGRAM_BOT_TOKEN
+
+_allowed_chat_raw = os.getenv("ALLOWED_CHAT_IDS", "")
+if not _allowed_chat_raw.strip():
+    _allowed_chat_raw = os.getenv("TELEGRAM_CHAT_ID", "")
+
 ALLOWED_CHAT_IDS = {
     int(chat_id.strip())
-    for chat_id in os.getenv("ALLOWED_CHAT_IDS", "").split(",")
+    for chat_id in _allowed_chat_raw.split(",")
     if chat_id.strip()
 }
 
